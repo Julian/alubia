@@ -1,0 +1,234 @@
+"""
+Something like beancount's own API with some niceties.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, Literal
+
+from attrs import evolve, field, frozen
+from rpds import Queue
+
+from alubia.exceptions import InvalidTransaction
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+    from datetime import date
+    from numbers import Number
+
+    from attrs import Attribute
+
+
+def _to_beancount_account_str(parts: Iterable[str]):
+    return ":".join(parts)
+
+
+@frozen
+class Transaction:
+    """
+    A beancount transaction.
+    """
+
+    date: date
+    postings: Sequence[Posting] = field()
+    payee: str
+
+    @postings.validator  # type: ignore[reportAttributeAccessIssue]
+    def _check(self, attribute: Attribute, value: Sequence[Posting]):  # type: ignore[reportUnknownParameterType]
+        implicit = {posting for posting in value if posting.is_implicit}
+        if len(implicit) > 1:
+            raise InvalidTransaction(
+                f"Multiple postings have implicit amounts: {implicit}",
+            )
+
+    def explicit(self):
+        """
+        A version of this transaction where all postings have explicit amounts.
+        """
+        if not self.postings:
+            return self
+
+        # FIXME: Amount to balance can have multiple currencies
+        implicit: int | None = None
+        total: Amount | Literal[0] = 0
+        postings: list[Posting | None] = []
+        for i, posting in enumerate(self.postings):
+            if posting.is_implicit:
+                assert implicit is None, "somehow multiple implicit postings??"
+                implicit = i
+                postings.append(None)
+            else:
+                total += posting.amount  # type: ignore[reportOperatorIssue]
+                postings.append(posting)
+        if implicit is None:
+            return self
+
+        postings[implicit] = -evolve(self.postings[implicit], amount=total)
+        return evolve(self, postings=postings)
+
+    def serialize(self, width: int = 100):
+        """
+        Export this transaction to beancount's format.
+        """
+        lines = [f'{self.date} * "{self.payee}"']
+        lines.extend(
+            f"  {posting.serialize(width)}" for posting in self.postings
+        )
+        return "\n".join(lines)
+
+
+@frozen
+class Posting:
+    """
+    A leg of a transaction (i.e. a single account and amount).
+    """
+
+    _account: Account = field(alias="account", repr=str)
+    amount: Amount | None = field(default=None)
+
+    def __neg__(self):
+        if self.amount is None:
+            return NotImplemented
+        return evolve(self, amount=-self.amount)
+
+    @property
+    def is_implicit(self):
+        """
+        Does this posting have an amount?
+        """
+        return self.amount is None
+
+    def serialize(self, width: int):
+        """
+        Export this posting to beancount's line format.
+        """
+        amount = str(self.amount or "")
+        padding = width - len(amount)
+        return f"{self._account:<{padding}}{amount}"
+
+    def transact(
+        self,
+        *postings: Posting | Account,
+        **kwargs: Any,
+    ) -> Transaction:
+        """
+        Create a transaction with this posting in it.
+        """
+        combined = [self]
+        combined.extend(each.posting() for each in postings)  # type: ignore[reportArgumentType]
+        return Transaction(postings=combined, **kwargs)
+
+    def posting(self):
+        """
+        We are already one.
+        """
+        return self
+
+
+@frozen
+class Account:
+    """
+    A beancount account.
+    """
+
+    _parts: Queue[str] = field(
+        alias="parts",
+        converter=Queue,
+        repr=_to_beancount_account_str,
+    )
+    _prefix: str = field(alias="prefix", default="")
+
+    def __getattr__(self, name: str):
+        """
+        Get a child of this account if the name part is valid.
+        """
+        if not name[0].isupper():
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'",
+            )
+        return self.child(name)
+
+    def __getitem__(self, name: str):
+        """
+        Get a child of this account.
+        """
+        return self.child(name)
+
+    def __invert__(self):
+        """
+        Mark this account flagged when it is part of a posting.
+        """
+        prefix = "" if self._prefix else "! "
+        return evolve(self, prefix=prefix)
+
+    def __format__(self, spec: str):
+        return format(str(self), spec)
+
+    def __str__(self):
+        return f"{self._prefix}{_to_beancount_account_str(self._parts)}"
+
+    def child(self, name: str):
+        """
+        A child of this account.
+        """
+        return evolve(self, parts=self._parts.enqueue(name))
+
+    def posting(self, **kwargs: Any):
+        """
+        A posting for this account.
+        """
+        return Posting(account=self, **kwargs)
+
+
+@frozen
+class Amount:
+    """
+    A number of a specific commodity.
+    """
+
+    number: Decimal
+    commodity: str
+
+    @classmethod
+    def from_str(cls, value: str) -> Amount:
+        """
+        Extract an amount from a string.
+        """
+        rest = value[1:].replace(",", "")
+        match value[0]:
+            case "$":
+                return cls(number=Decimal(rest), commodity="USD")
+            case _:
+                raise NotImplementedError(value)
+
+    def __add__(self, other: Amount):
+        if other.commodity != self.commodity:
+            return NotImplemented
+        return evolve(self, number=self.number + other.number)
+
+    def __radd__(self, other: Number):
+        if other != 0:  # type: ignore[reportUnnecessaryComparison] um. wut?
+            return NotImplemented
+        return self
+
+    def __rmul__(self, other: Number):
+        return evolve(self, number=other * self.number)  # type: ignore[reportOperatorIssue]
+
+    def __neg__(self):
+        return evolve(self, number=-self.number)
+
+    def __str__(self):
+        return f"{self.number} {self.commodity}"
+
+    def zero(self):
+        """
+        Zero in this commodity.
+        """
+        return evolve(self, number=Decimal(0))
+
+
+Assets = Account(["Assets"])
+Expenses = Account(["Expenses"])
+Income = Account(["Income"])
+Liabilities = Account(["Liabilities"])
