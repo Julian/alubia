@@ -195,6 +195,9 @@ class Amount:
         """
         Extract an amount from a string.
         """
+        if value.startswith("(") and value.endswith(")"):
+            return -cls.from_str(value[1:-1])
+
         rest = value[1:].replace(",", "")
         match value[0]:
             case "$":
