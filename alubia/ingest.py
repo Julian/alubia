@@ -14,14 +14,15 @@ if TYPE_CHECKING:
 
 def from_csv(
     path: Path,
-    date_column: str = "date",
-) -> tuple[date, dict[str, Any]]:
+    date_from: str = "Date",
+    payee_from: str = "Description",
+) -> tuple[date, str, dict[str, Any]]:
     """
     Partially parse a given csv path.
     """
     with path.open(newline="") as contents:
         reader = DictReader(contents)
         for row in reader:
-            date_str = row.pop(date_column)
+            date_str = row.pop(date_from)
             row_date = date.strptime(date_str, "%m/%d/%Y")
-            yield row_date, row
+            yield row_date, row.pop(payee_from).strip(), row
