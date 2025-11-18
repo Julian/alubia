@@ -9,6 +9,7 @@ from datetime import date
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from pathlib import Path
 
 
@@ -16,7 +17,7 @@ def from_csv(
     path: Path,
     date_from: str = "Date",
     payee_from: str = "Description",
-) -> tuple[date, str, dict[str, Any]]:
+) -> Iterable[tuple[date, str, dict[str, Any]]]:
     """
     Partially parse a given csv path.
     """
@@ -25,4 +26,5 @@ def from_csv(
         for row in reader:
             date_str = row.pop(date_from)
             row_date = date.strptime(date_str, "%m/%d/%Y")
-            yield row_date, row.pop(payee_from).strip(), row
+            payee = row.pop(payee_from).strip()
+            yield row_date, payee, row

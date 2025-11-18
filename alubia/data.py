@@ -213,7 +213,7 @@ class Amount:
         return evolve(self, number=self.number + other.number)
 
     def __lt__(self, other: Amount):
-        if other == 0:
+        if other == 0:  # type: ignore[reportUnnecessaryComparison] um. wut?
             other = self.zero()
         elif (
             self.__class__ is not other.__class__
