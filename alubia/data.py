@@ -5,6 +5,7 @@ Something like beancount's own API with some niceties.
 from __future__ import annotations
 
 from decimal import Decimal
+from functools import total_ordering
 from typing import TYPE_CHECKING, Any, Literal
 
 from attrs import evolve, field, frozen
@@ -182,6 +183,7 @@ class Account:
 
 
 @frozen
+@total_ordering
 class Amount:
     """
     A number of a specific commodity.
@@ -209,6 +211,16 @@ class Amount:
         if other.commodity != self.commodity:
             return NotImplemented
         return evolve(self, number=self.number + other.number)
+
+    def __lt__(self, other: Amount):
+        if other == 0:
+            other = self.zero()
+        elif (
+            self.__class__ is not other.__class__
+            or self.commodity != other.commodity
+        ):
+            return NotImplemented
+        return self.number < other.number
 
     def __radd__(self, other: Number):
         if other != 0:  # type: ignore[reportUnnecessaryComparison] um. wut?

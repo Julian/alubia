@@ -176,3 +176,9 @@ class TestAmount:
 
     def test_neg(self):
         assert -USD100 == Amount(commodity="USD", number=Decimal(-100))
+
+    def test_gt(self):
+        assert USD100 > 0
+
+    def test_lt(self):
+        assert USD100 < USD200
