@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
@@ -39,11 +40,19 @@ class TestAccount:
         posting = account.posting(amount=USD100)
         assert posting == Posting(account=account, amount=USD100)
 
+    def test_flagged(self):
+        assert str(~Assets.Bank.Checking) == "! Assets:Bank:Checking"
+
 
 BANK = Assets.Bank.Checking
 
 
 class TestPosting:
+    def test_posting_negation(self):
+        account = Assets.Bank.Checking
+        posting = Posting(account=account, amount=USD100)
+        assert -posting == Posting(account=account, amount=-USD100)
+
     def test_transact(self):
         posting = BANK.posting(amount=USD100)
         transaction = posting.transact(
@@ -78,6 +87,14 @@ class TestPosting:
 
     def test_default_amount(self):
         assert Posting(account=BANK, amount=None) == Posting(account=BANK)
+
+    def test_implicit(self):
+        implicit = Posting(account=Assets.Bank.Checking)
+        assert implicit.is_implicit
+
+    def test_explicit(self):
+        explicit = Posting(account=Assets.Bank.Checking, amount=USD100)
+        assert not explicit.is_implicit
 
 
 class TestTransaction:
@@ -135,3 +152,23 @@ class TestTransaction:
         p2 = Posting(account=Income.Salary)
         with pytest.raises(InvalidTransaction):
             Transaction(payee="", date=TODAY, postings=[p1, p2])
+
+
+class TestAmount:
+    def test_from_str_dollars(self):
+        amount = Amount.from_str("$100.00")
+        assert amount == Amount(commodity="USD", number=Decimal(100))
+
+    def test_from_str_invalid(self):
+        with pytest.raises(NotImplementedError):
+            Amount.from_str("asdf")
+
+    def test_zero(self):
+        zero_usd = Amount.from_str("$100.00").zero()
+        assert zero_usd == Amount(commodity="USD", number=Decimal(0))
+
+    def test_add(self):
+        assert USD100 + USD200 == Amount(commodity="USD", number=Decimal(300))
+
+    def test_neg(self):
+        assert -USD100 == Amount(commodity="USD", number=Decimal(-100))
