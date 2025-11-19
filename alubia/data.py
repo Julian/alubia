@@ -240,7 +240,11 @@ class Amount:
         return evolve(self, number=-self.number)
 
     def __str__(self):
-        return f"{self.number} {self.commodity}"
+        if self.number == self.number.to_integral():
+            number = self.number
+        else:
+            number = self.number.quantize(Decimal("0.01"))
+        return f"{number} {self.commodity}"
 
     def zero(self):
         """

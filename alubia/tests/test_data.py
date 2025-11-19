@@ -196,3 +196,19 @@ class TestAmount:
 
     def test_lt(self):
         assert USD100 < USD200
+
+    def test_str_exact_dollar(self):
+        amount = Amount(commodity="USD", number=Decimal(100))
+        assert str(amount) == "100 USD"
+
+    def test_str_cents(self):
+        amount = Amount(commodity="USD", number=Decimal("100.23"))
+        assert str(amount) == "100.23 USD"
+
+    def test_str_quantized_round_down(self):
+        amount = Amount(commodity="USD", number=Decimal("100.23456"))
+        assert str(amount) == "100.23 USD"
+
+    def test_str_quantized_round_up(self):
+        amount = Amount(commodity="USD", number=Decimal("100.23566"))
+        assert str(amount) == "100.24 USD"
