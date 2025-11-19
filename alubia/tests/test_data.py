@@ -40,6 +40,20 @@ class TestAccount:
         posting = account.posting(amount=USD100)
         assert posting == Posting(account=account, amount=USD100)
 
+    def test_transact(self):
+        assert BANK.transact(
+            Liabilities.Credit.Visa.posting(amount=USD100),
+            date=date.today(),
+            payee="Foo",
+        ) == Transaction(
+            payee="Foo",
+            date=date.today(),
+            postings=[
+                BANK.posting(),
+                Liabilities.Credit.Visa.posting(amount=USD100),
+            ],
+        )
+
     def test_flagged(self):
         assert str(~Assets.Bank.Checking) == "! Assets:Bank:Checking"
 

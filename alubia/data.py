@@ -175,11 +175,17 @@ class Account:
         """
         return evolve(self, parts=self._parts.enqueue(name))
 
-    def posting(self, **kwargs: Any):
+    def posting(self, **kwargs: Any) -> Posting:
         """
         A posting for this account.
         """
         return Posting(account=self, **kwargs)
+
+    def transact[**P](self, *args: Posting, **kwargs: P.kwargs):  # type: ignore[reportGeneralTypeIssues]
+        """
+        Transact on this account as an implicit posting.
+        """
+        return self.posting().transact(*args, **kwargs)
 
 
 @frozen
