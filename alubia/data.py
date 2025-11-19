@@ -25,6 +25,9 @@ def _to_beancount_account_str(parts: Iterable[str]):
     return ":".join(parts)
 
 
+_DEFAULT_WIDTH = 100
+
+
 @frozen
 class Transaction:
     """
@@ -68,7 +71,7 @@ class Transaction:
         postings[implicit] = -evolve(self.postings[implicit], amount=total)
         return evolve(self, postings=postings)
 
-    def serialize(self, width: int = 100):
+    def serialize(self, width: int = _DEFAULT_WIDTH):
         """
         Export this transaction to beancount's format.
         """
@@ -168,6 +171,13 @@ class Account:
 
     def __str__(self):
         return f"{self._prefix}{_to_beancount_account_str(self._parts)}"
+
+    def balance(self, date: date, amount: Amount, width: int = _DEFAULT_WIDTH):
+        """
+        Emit a balance assertion on this account.
+        """
+        without_prefix = width - 29
+        return f"{date} balance {self:<{without_prefix}} {amount}"
 
     def child(self, name: str):
         """
