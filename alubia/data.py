@@ -37,6 +37,7 @@ class Transaction:
     date: date
     postings: Sequence[Posting] = field()
     payee: str
+    narration: str = ""
 
     @postings.validator  # type: ignore[reportAttributeAccessIssue]
     def _check(
@@ -79,7 +80,8 @@ class Transaction:
         """
         Export this transaction to beancount's format.
         """
-        lines = [f'{self.date} * "{self.payee}"']
+        narration = f' "{self.narration}"' if self.narration else ""
+        lines = [f'{self.date} * "{self.payee}"{narration}']
         lines.extend(
             f"  {posting.serialize(width)}" for posting in self.postings
         )
