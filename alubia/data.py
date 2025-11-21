@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from functools import total_ordering
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from attrs import evolve, field, frozen
 from rpds import Queue
@@ -39,8 +39,12 @@ class Transaction:
     payee: str
 
     @postings.validator  # type: ignore[reportAttributeAccessIssue]
-    def _check(self, attribute: Attribute, value: Sequence[Posting]):  # type: ignore[reportUnknownParameterType]
-        implicit = {posting for posting in value if posting.is_implicit}
+    def _check(
+        self,
+        attribute: Attribute[Sequence[Posting]],
+        value: Sequence[Posting],
+    ):
+        implicit = {posting for posting in value if posting.amount is None}
         if len(implicit) > 1:
             raise InvalidTransaction(
                 f"Multiple postings have implicit amounts: {implicit}",
@@ -58,7 +62,7 @@ class Transaction:
         total: Amount | Literal[0] = 0
         postings: list[Posting | None] = []
         for i, posting in enumerate(self.postings):
-            if posting.is_implicit:
+            if posting.amount is None:
                 assert implicit is None, "somehow multiple implicit postings??"
                 implicit = i
                 postings.append(None)
@@ -82,6 +86,16 @@ class Transaction:
         return "\n".join(lines)
 
 
+class _PostingLike(Protocol):
+    """
+    A thing which can be treated like a posting.
+
+    Basically a posting or an account.
+    """
+
+    def posting(self) -> Posting: ...
+
+
 @frozen
 class Posting:
     """
@@ -96,13 +110,6 @@ class Posting:
             return NotImplemented
         return evolve(self, amount=-self.amount)
 
-    @property
-    def is_implicit(self):
-        """
-        Does this posting have an amount?
-        """
-        return self.amount is None
-
     def serialize(self, width: int):
         """
         Export this posting to beancount's line format.
@@ -111,16 +118,12 @@ class Posting:
         padding = width - len(amount)
         return f"{self._account:<{padding}}{amount}"
 
-    def transact(
-        self,
-        *postings: Posting | Account,
-        **kwargs: Any,
-    ) -> Transaction:
+    def transact(self, *postings: _PostingLike, **kwargs: Any) -> Transaction:
         """
         Create a transaction with this posting in it.
         """
-        combined = [self]
-        combined.extend(each.posting() for each in postings)  # type: ignore[reportArgumentType]
+        combined: list[Posting] = [self]
+        combined.extend(each.posting() for each in postings)
         return Transaction(postings=combined, **kwargs)
 
     def posting(self):

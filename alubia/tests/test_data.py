@@ -102,14 +102,6 @@ class TestPosting:
     def test_default_amount(self):
         assert Posting(account=BANK, amount=None) == Posting(account=BANK)
 
-    def test_implicit(self):
-        implicit = Posting(account=Assets.Bank.Checking)
-        assert implicit.is_implicit
-
-    def test_explicit(self):
-        explicit = Posting(account=Assets.Bank.Checking, amount=USD100)
-        assert not explicit.is_implicit
-
 
 class TestTransaction:
     def test_explicit_two_postings_one_implicit(self):
