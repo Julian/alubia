@@ -1,5 +1,5 @@
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import pytest
 
@@ -173,9 +173,17 @@ class TestAmount:
         amount = Amount.from_str("($100.00)")
         assert amount == Amount(commodity="USD", number=Decimal(-100))
 
+    def test_from_str_commodity(self):
+        amount = Amount.from_str("100.00", commodity="STUFF")
+        assert amount == Amount(commodity="STUFF", number=Decimal(100))
+
     def test_from_str_invalid(self):
         with pytest.raises(NotImplementedError):
             Amount.from_str("asdf")
+
+    def test_from_str_commodity_conflict(self):
+        with pytest.raises(InvalidOperation):
+            Amount.from_str("$100.00", commodity="STUFF")
 
     def test_zero(self):
         zero_usd = Amount.from_str("$100.00").zero()

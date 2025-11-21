@@ -214,21 +214,26 @@ class Amount:
     commodity: str
 
     @classmethod
-    def from_str(cls, value: str) -> Amount:
+    def from_str(cls, value: str, commodity: str | None = None) -> Amount:
         """
         Extract an amount from a string.
         """
         if value.startswith("-"):
-            return -cls.from_str(value[1:])
+            return -cls.from_str(value[1:], commodity=commodity)
         elif value.startswith("(") and value.endswith(")"):
-            return -cls.from_str(value[1:-1])
+            return -cls.from_str(value[1:-1], commodity=commodity)
 
-        rest = value[1:].replace(",", "")
-        match value[0]:
-            case "$":
-                return cls(number=Decimal(rest), commodity="USD")
-            case _:
-                raise NotImplementedError(value)
+        rest = value.replace(",", "")
+
+        if commodity is None:
+            rest = rest[1:]
+            match value[0]:
+                case "$":
+                    commodity = "USD"
+                case _:
+                    raise NotImplementedError(value)
+
+        return cls(number=Decimal(rest), commodity=commodity)
 
     def __add__(self, other: Amount):
         if other.commodity != self.commodity:
