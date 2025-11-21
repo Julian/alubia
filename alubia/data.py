@@ -51,6 +51,12 @@ class Transaction:
                 f"Multiple postings have implicit amounts: {implicit}",
             )
 
+    def commented(self):
+        """
+        Comment out this transaction.
+        """
+        return _Commented(self)
+
     def explicit(self):
         """
         A version of this transaction where all postings have explicit amounts.
@@ -117,6 +123,9 @@ class Posting:
         Export this posting to beancount's line format.
         """
         amount = str(self.amount or "")
+        if not amount:
+            return self._account
+
         padding = width - len(amount)
         return f"{self._account:<{padding}}{amount}"
 
@@ -293,6 +302,19 @@ class Amount:
         Zero in this commodity.
         """
         return evolve(self, number=Decimal(0))
+
+
+@frozen
+class _Commented:
+    """
+    A commented out beancount item.
+    """
+
+    _wrapped: Transaction
+
+    def serialize(self, width: int = _DEFAULT_WIDTH):
+        serialized: str = self._wrapped.serialize(width)
+        return "".join(f"; {line}" for line in serialized.splitlines(True))
 
 
 Assets = Account(["Assets"])

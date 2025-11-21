@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal, InvalidOperation
+from textwrap import dedent
 
 import pytest
 
@@ -252,3 +253,25 @@ class TestAmount:
             total_cost=USD100,
         )
         assert str(amount) == "37 FOO @@ 100.00 USD"
+
+
+class TestCommented:
+    def test_transaction(self):
+        nye = date(2025, 12, 31)
+        tx = (
+            BANK.posting(amount=USD100)
+            .transact(
+                Assets.Foo,
+                date=nye,
+                payee="Lunch",
+            )
+            .commented()
+        )
+        expected = dedent(
+            """\
+            ; 2025-12-31 * "Lunch"
+            ;   Assets:Bank:Checking                    100.00 USD
+            ;   Assets:Foo
+            """,
+        ).strip()
+        assert tx.serialize(width=50) == expected
