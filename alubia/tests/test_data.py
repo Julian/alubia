@@ -184,6 +184,9 @@ class TestAmount:
     def test_add(self):
         assert USD100 + USD200 == Amount(commodity="USD", number=Decimal(300))
 
+    def test_div(self):
+        assert USD200 / 2 == USD100
+
     def test_neg(self):
         assert -USD100 == Amount(commodity="USD", number=Decimal(-100))
 

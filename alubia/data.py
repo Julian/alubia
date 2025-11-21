@@ -233,6 +233,12 @@ class Amount:
             return NotImplemented
         return evolve(self, number=self.number + other.number)
 
+    def __neg__(self):
+        return evolve(self, number=-self.number)
+
+    def __truediv__(self, other: int):
+        return evolve(self, number=self.number / other)
+
     def __lt__(self, other: Amount):
         if other == 0:  # type: ignore[reportUnnecessaryComparison] um. wut?
             other = self.zero()
@@ -250,9 +256,6 @@ class Amount:
 
     def __rmul__(self, other: Number):
         return evolve(self, number=other * self.number)  # type: ignore[reportOperatorIssue]
-
-    def __neg__(self):
-        return evolve(self, number=-self.number)
 
     def __str__(self):
         if self.number == self.number.to_integral():
