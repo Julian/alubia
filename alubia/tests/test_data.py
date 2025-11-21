@@ -219,3 +219,36 @@ class TestAmount:
     def test_str_quantized_round_up(self):
         amount = Amount(commodity="USD", number=Decimal("100.23566"))
         assert str(amount) == "100.24 USD"
+
+    def test_str_held_at(self):
+        amount = Amount(
+            commodity="FOO",
+            number=Decimal(37),
+            held_at=USD100,
+        )
+        assert str(amount) == "37 FOO {100.00 USD}"
+
+    def test_str_label(self):
+        amount = Amount(
+            commodity="FOO",
+            number=Decimal(37),
+            label="stuff",
+        )
+        assert str(amount) == '37 FOO {"stuff"}'
+
+    def test_str_held_at_with_label(self):
+        amount = Amount(
+            commodity="FOO",
+            number=Decimal(37),
+            held_at=USD200,
+            label="stuff",
+        )
+        assert str(amount) == '37 FOO {200.00 USD, "stuff"}'
+
+    def test_str_total_cost(self):
+        amount = Amount(
+            commodity="FOO",
+            number=Decimal(37),
+            total_cost=USD100,
+        )
+        assert str(amount) == "37 FOO @@ 100.00 USD"

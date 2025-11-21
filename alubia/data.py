@@ -212,19 +212,23 @@ class Amount:
 
     number: Decimal
     commodity: str
+    label: str = ""
+    held_at: Amount | None = None
+    total_cost: Amount | None = None
 
     @classmethod
-    def from_str(cls, value: str, commodity: str | None = None) -> Amount:
+    def from_str(cls, value: str, **kwargs: Any) -> Amount:
         """
         Extract an amount from a string.
         """
         if value.startswith("-"):
-            return -cls.from_str(value[1:], commodity=commodity)
+            return -cls.from_str(value[1:], **kwargs)
         elif value.startswith("(") and value.endswith(")"):
-            return -cls.from_str(value[1:-1], commodity=commodity)
+            return -cls.from_str(value[1:-1], **kwargs)
 
         rest = value.replace(",", "")
 
+        commodity = kwargs.pop("commodity", None)
         if commodity is None:
             rest = rest[1:]
             match value[0]:
@@ -233,7 +237,10 @@ class Amount:
                 case _:
                     raise NotImplementedError(value)
 
-        return cls(number=Decimal(rest), commodity=commodity)
+        return cls(number=Decimal(rest), commodity=commodity, **kwargs)
+
+    # FIXME: numerical operations don't make a ton of sense if held_at / label
+    #        is set, or at least if they're different
 
     def __add__(self, other: Amount):
         if other.commodity != self.commodity:
@@ -269,7 +276,17 @@ class Amount:
             number = self.number
         else:
             number = self.number.quantize(Decimal("0.01"))
-        return f"{number} {self.commodity}"
+
+        parts: list[str] = []
+        if self.held_at:
+            parts.append(str(self.held_at))
+        if self.label:
+            parts.append(f'"{self.label}"')
+        braced = f" {{{', '.join(parts)}}}" if parts else ""
+
+        cost = f" @@ {self.total_cost}" if self.total_cost else ""
+
+        return f"{number} {self.commodity}{braced}{cost}"
 
     def zero(self):
         """
