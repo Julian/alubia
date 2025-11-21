@@ -312,6 +312,9 @@ class _Commented:
 
     _wrapped: Transaction
 
+    def explicit(self):
+        return self.__class__(self._wrapped.explicit())
+
     def serialize(self, width: int = _DEFAULT_WIDTH):
         serialized: str = self._wrapped.serialize(width)
         return "".join(f"; {line}" for line in serialized.splitlines(True))
