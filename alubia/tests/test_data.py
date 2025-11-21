@@ -165,6 +165,10 @@ class TestAmount:
         amount = Amount.from_str("$100.00")
         assert amount == Amount(commodity="USD", number=Decimal(100))
 
+    def test_from_str_negative_dollars(self):
+        amount = Amount.from_str("-$200.00")
+        assert amount == -Amount(commodity="USD", number=Decimal(200))
+
     def test_from_str_accounting_notation(self):
         amount = Amount.from_str("($100.00)")
         assert amount == Amount(commodity="USD", number=Decimal(-100))
