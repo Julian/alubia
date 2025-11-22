@@ -334,11 +334,6 @@ class Amount:
         return evolve(self, number=other * self.number)  # type: ignore[reportOperatorIssue]
 
     def __str__(self):
-        if self.number == self.number.to_integral():
-            number = self.number
-        else:
-            number = self.number.quantize(Decimal("0.01"))
-
         parts: list[str] = []
         if self.held_at:
             parts.append(str(self.held_at))
@@ -348,7 +343,7 @@ class Amount:
 
         cost = f" @@ {self.total_cost}" if self.total_cost else ""
 
-        return f"{number} {self.commodity}{braced}{cost}"
+        return f"{self.number} {self.commodity}{braced}{cost}"
 
     def zero(self):
         """

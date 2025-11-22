@@ -360,13 +360,9 @@ class TestAmount:
         amount = Amount(commodity="USD", number=Decimal("100.23"))
         assert str(amount) == "100.23 USD"
 
-    def test_str_quantized_round_down(self):
+    def test_str_not_quantized(self):
         amount = Amount(commodity="USD", number=Decimal("100.23456"))
-        assert str(amount) == "100.23 USD"
-
-    def test_str_quantized_round_up(self):
-        amount = Amount(commodity="USD", number=Decimal("100.23566"))
-        assert str(amount) == "100.24 USD"
+        assert str(amount) == "100.23456 USD"
 
     def test_str_held_at(self):
         amount = Amount(
