@@ -1,5 +1,5 @@
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation as InvalidDecimalOperation
 from textwrap import dedent
 
 import pytest
@@ -13,7 +13,7 @@ from alubia.data import (
     Posting,
     Transaction,
 )
-from alubia.exceptions import InvalidTransaction
+from alubia.exceptions import InvalidOperation, InvalidTransaction
 
 TODAY = date.today()
 USD100 = Amount.from_str("$100.00")
@@ -183,7 +183,7 @@ class TestAmount:
             Amount.from_str("asdf")
 
     def test_from_str_commodity_conflict(self):
-        with pytest.raises(InvalidOperation):
+        with pytest.raises(InvalidDecimalOperation):
             Amount.from_str("$100.00", commodity="STUFF")
 
     def test_zero(self):
@@ -204,6 +204,128 @@ class TestAmount:
 
     def test_lt(self):
         assert USD100 < USD200
+
+    def test_add_with_held_at(self):
+        a1 = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            held_at=Amount(commodity="USD", number=Decimal(50)),
+        )
+        a2 = Amount(
+            commodity="USD",
+            number=Decimal(200),
+            held_at=Amount(commodity="USD", number=Decimal(25)),
+        )
+        assert a1 + a2 == Amount(
+            commodity="USD",
+            number=Decimal(300),
+            held_at=Amount(commodity="USD", number=Decimal(75)),
+        )
+
+    def test_div_with_held_at_and_total_cost(self):
+        a = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            held_at=Amount(commodity="USD", number=Decimal(50)),
+            total_cost=Amount(commodity="USD", number=Decimal(20)),
+        )
+        assert a / 2 == Amount(
+            commodity="USD",
+            number=Decimal(50),
+            held_at=Amount(commodity="USD", number=Decimal(25)),
+            total_cost=Amount(commodity="USD", number=Decimal(10)),
+        )
+
+    def test_div_held_at_different_units(self):
+        a = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            held_at=Amount(commodity="EUR", number=Decimal(50)),
+        )
+        assert a / 2 == Amount(
+            commodity="USD",
+            number=Decimal(50),
+            held_at=Amount(commodity="EUR", number=Decimal(25)),
+        )
+
+    def test_div_total_cost_different_units(self):
+        a = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            total_cost=Amount(commodity="EUR", number=Decimal(20)),
+        )
+        assert a / 2 == Amount(
+            commodity="USD",
+            number=Decimal(50),
+            total_cost=Amount(commodity="EUR", number=Decimal(10)),
+        )
+
+    def test_add_incompatible_commodities(self):
+        a1 = Amount(commodity="USD", number=Decimal(100))
+        a2 = Amount(commodity="EUR", number=Decimal(200))
+        with pytest.raises(TypeError):
+            a1 + a2
+
+    def test_add_incompatible_held_at(self):
+        a1 = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            held_at=Amount(commodity="USD", number=Decimal(50)),
+        )
+        a2 = Amount(
+            commodity="USD",
+            number=Decimal(200),
+            held_at=Amount(commodity="EUR", number=Decimal(25)),
+        )
+        with pytest.raises(TypeError):
+            a1 + a2
+
+    def test_add_one_side_has_held_at(self):
+        a1 = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            held_at=Amount(commodity="USD", number=Decimal(50)),
+        )
+        a2 = Amount(commodity="USD", number=Decimal(200))
+        with pytest.raises(TypeError):
+            a1 + a2
+        with pytest.raises(TypeError):
+            a2 + a1
+
+    def test_add_incompatible_total_cost(self):
+        a1 = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            total_cost=Amount(commodity="USD", number=Decimal(10)),
+        )
+        a2 = Amount(
+            commodity="USD",
+            number=Decimal(200),
+            total_cost=Amount(commodity="EUR", number=Decimal(20)),
+        )
+        with pytest.raises(TypeError):
+            a1 + a2
+
+    def test_add_one_side_has_total_cost(self):
+        a1 = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            total_cost=Amount(commodity="USD", number=Decimal(50)),
+        )
+        a2 = Amount(commodity="USD", number=Decimal(200))
+        with pytest.raises(InvalidOperation):
+            a1 + a2
+        with pytest.raises(InvalidOperation):
+            a2 + a1
+
+    def test_neg_with_total_cost(self):
+        a = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            total_cost=Amount(commodity="USD", number=Decimal(20)),
+        )
+        with pytest.raises(InvalidOperation, match="negative cost"):
+            -a
 
     def test_str_exact_dollar(self):
         amount = Amount(commodity="USD", number=Decimal(100))

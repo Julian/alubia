@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal, Protocol
 from attrs import evolve, field, frozen
 from rpds import Queue
 
-from alubia.exceptions import InvalidTransaction
+from alubia.exceptions import InvalidOperation, InvalidTransaction
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -254,19 +254,55 @@ class Amount:
 
         return cls(number=Decimal(rest), commodity=commodity, **kwargs)
 
-    # FIXME: numerical operations don't make a ton of sense if held_at / label
-    #        is set, or at least if they're different
-
     def __add__(self, other: Amount):
         if other.commodity != self.commodity:
             return NotImplemented
-        return evolve(self, number=self.number + other.number)
+
+        held_at: Amount | None = self.held_at
+        if held_at:
+            if not other.held_at:
+                return NotImplemented
+            held_at += other.held_at
+        elif other.held_at:
+            return NotImplemented
+
+        total_cost = self.total_cost
+        if total_cost is not None:
+            if other.total_cost is None:
+                raise InvalidOperation("Incompatible total costs")
+            total_cost += other.total_cost
+        elif other.total_cost is not None:
+            raise InvalidOperation("Incompatible total costs")
+
+        return evolve(
+            self,
+            number=self.number + other.number,
+            held_at=held_at,
+        )
 
     def __neg__(self):
-        return evolve(self, number=-self.number)
+        if self.total_cost:
+            raise InvalidOperation(
+                "Beancount does not support negative costs.",
+            )
+        held_at: Amount | None = (
+            None if self.held_at is None else -self.held_at
+        )
+        return evolve(self, number=-self.number, held_at=held_at)
 
-    def __truediv__(self, other: int):
-        return evolve(self, number=self.number / other)
+    def __truediv__(self, n: int):
+        held_at: Amount | None = (
+            None if self.held_at is None else self.held_at / n
+        )
+        total_cost: Amount | None = (
+            None if self.total_cost is None else self.total_cost / n
+        )
+        return evolve(
+            self,
+            number=self.number / n,
+            held_at=held_at,
+            total_cost=total_cost,
+        )
 
     def __lt__(self, other: Amount):
         if other == 0:  # type: ignore[reportUnnecessaryComparison] um. wut?
