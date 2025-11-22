@@ -8,16 +8,23 @@ from csv import DictReader
 from typing import TYPE_CHECKING, Any
 import datetime
 
+from attrs import frozen
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from pathlib import Path
+
+    from alubia.data import (
+        Transaction,
+        _PostingLike,  # type: ignore[reportPrivateUsage]
+    )
 
 
 def from_csv(
     path: Path,
     date: Callable[[dict[str, Any]], str] = lambda row: row["Date"],
     payee: Callable[[dict[str, Any]], str] = lambda row: row["Description"],
-) -> Iterable[tuple[datetime.date, str, dict[str, Any]]]:
+) -> Iterable[tuple[_PartialTransaction, dict[str, Any]]]:
     """
     Partially parse a given csv path.
     """
@@ -25,4 +32,28 @@ def from_csv(
         reader = DictReader(contents)
         for row in reader:
             row_date = datetime.date.strptime(date(row), "%m/%d/%Y")
-            yield row_date, payee(row).strip(), row
+            row_payee = payee(row).strip()
+            yield _PartialTransaction(row_date, row_payee), row
+
+
+@frozen
+class _PartialTransaction:
+    """
+    A partially parsed transaction.
+    """
+
+    date: datetime.date
+    payee: str
+
+    def __call__(
+        self,
+        first: _PostingLike,
+        *args: _PostingLike,
+        **kwargs: Any,
+    ) -> Transaction:
+        return first.transact(
+            *args,
+            **kwargs,
+            date=self.date,
+            payee=self.payee,
+        )

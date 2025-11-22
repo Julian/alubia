@@ -103,6 +103,12 @@ class _PostingLike(Protocol):
 
     def posting(self) -> Posting: ...
 
+    def transact(
+        self,
+        *postings: _PostingLike,
+        **kwargs: Any,
+    ) -> Transaction: ...
+
 
 @frozen
 class Posting:
