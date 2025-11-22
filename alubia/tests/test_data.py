@@ -270,7 +270,7 @@ class TestCommented:
         expected = dedent(
             """\
             ; 2025-12-31 * "Lunch"
-            ;   Assets:Bank:Checking                    100.00 USD
+            ;   Assets:Bank:Checking                  100.00 USD
             ;   Assets:Foo
             """,
         ).strip()
