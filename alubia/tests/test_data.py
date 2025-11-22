@@ -16,6 +16,7 @@ from alubia.data import (
 from alubia.exceptions import InvalidOperation, InvalidTransaction
 
 TODAY = date.today()
+GBP100 = Amount.from_str("£100.00")
 USD100 = Amount.from_str("$100.00")
 USD200 = Amount.from_str("$200.00")
 
@@ -154,11 +155,35 @@ class TestTransaction:
         )
         assert tx.explicit() is tx
 
-    def test_missing_amounts(self):
-        p1 = Posting(account=Assets.Cash)
-        p2 = Posting(account=Income.Salary)
-        with pytest.raises(InvalidTransaction):
-            Transaction(payee="", date=TODAY, postings=[p1, p2])
+    def test_explicit_all_postings_have_amounts_different_commodities(self):
+        tx = Transaction(
+            date=TODAY,
+            payee="",
+            postings=[
+                Posting(account=Assets.Cash, amount=USD100),
+                Posting(account=Income.Salary, amount=GBP100),
+            ],
+        )
+        assert tx.explicit() is tx
+
+    def test_explicit_implicit_posting_multiple_commodities(self):
+        tx = Transaction(
+            date=TODAY,
+            payee="",
+            postings=[
+                Posting(account=Assets.Cash, amount=USD100),
+                Posting(account=Assets.Cash, amount=GBP100),
+                Posting(account=Income.Salary),
+            ],
+        )
+        with pytest.raises(InvalidTransaction, match="multiple commodities"):
+            tx.explicit()
+
+        def test_missing_amounts(self):
+            p1 = Posting(account=Assets.Cash)
+            p2 = Posting(account=Income.Salary)
+            with pytest.raises(InvalidTransaction):
+                Transaction(payee="", date=TODAY, postings=[p1, p2])
 
 
 class TestAmount:

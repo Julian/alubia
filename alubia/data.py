@@ -64,8 +64,8 @@ class Transaction:
         if not self.postings:
             return self
 
-        # FIXME: Amount to balance can have multiple currencies
         implicit: int | None = None
+        commodities: set[str] = set()
         total: Amount | Literal[0] = 0
         postings: list[Posting | None] = []
         for i, posting in enumerate(self.postings):
@@ -74,10 +74,17 @@ class Transaction:
                 implicit = i
                 postings.append(None)
             else:
-                total += posting.amount  # type: ignore[reportOperatorIssue]
-                postings.append(posting)
+                commodities.add(posting.amount.commodity)
+                if len(commodities) == 1:  # otherwise we'll fail if implicit
+                    total += posting.amount  # type: ignore[reportOperatorIssue]
+                    postings.append(posting)
         if implicit is None:
             return self
+        if len(commodities) > 1:
+            raise InvalidTransaction(
+                "Cannot balance a transaction with multiple commodities "
+                f"{commodities}",
+            )
 
         postings[implicit] = -evolve(self.postings[implicit], amount=total)
         return evolve(self, postings=postings)
@@ -249,6 +256,10 @@ class Amount:
             match value[0]:
                 case "$":
                     commodity = "USD"
+                case "£":
+                    commodity = "GBP"
+                case "€":
+                    commodity = "EUR"
                 case _:
                     raise NotImplementedError(value)
 
