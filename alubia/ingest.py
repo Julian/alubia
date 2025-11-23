@@ -7,6 +7,7 @@ from __future__ import annotations
 from csv import DictReader
 from typing import TYPE_CHECKING, Any
 import datetime
+import re
 
 from attrs import frozen
 
@@ -20,10 +21,26 @@ if TYPE_CHECKING:
     )
 
 
+type Row = dict[str, str]
+
+
+def _to_date(row: Row) -> datetime.date:
+    if "Date" in row:
+        raw = row["Date"]
+    elif "date" in row:
+        raw = row["date"]
+    else:
+        raise ValueError(f"Can't guess where the date is in {row}")
+
+    parts = re.split("[-/]", raw)
+    fmt = "%Y/%m/%d" if len(parts[0]) == 4 else "%m/%d/%Y"  # noqa: PLR2004
+    return datetime.date.strptime("/".join(parts), fmt)
+
+
 def from_csv(
     path: Path,
-    date: Callable[[dict[str, Any]], str] = lambda row: row["Date"],
-    payee: Callable[[dict[str, Any]], str] = lambda row: row["Description"],
+    date: Callable[[Row], datetime.date] = _to_date,
+    payee: Callable[[Row], str] = lambda row: row["Description"],
     encoding: str | None = None,
 ) -> Iterable[tuple[_PartialTransaction, dict[str, Any]]]:
     """
@@ -32,9 +49,8 @@ def from_csv(
     with path.open(newline="", encoding=encoding) as contents:
         reader = DictReader(_nonempty(contents))
         for row in reader:
-            row_date = datetime.date.strptime(date(row), "%m/%d/%Y")
             row_payee = payee(row).strip()
-            yield _PartialTransaction(row_date, row_payee), row
+            yield _PartialTransaction(date(row), row_payee), row
 
 
 def _nonempty(lines: Iterable[str]):
