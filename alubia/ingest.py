@@ -24,16 +24,24 @@ def from_csv(
     path: Path,
     date: Callable[[dict[str, Any]], str] = lambda row: row["Date"],
     payee: Callable[[dict[str, Any]], str] = lambda row: row["Description"],
+    encoding: str | None = None,
 ) -> Iterable[tuple[_PartialTransaction, dict[str, Any]]]:
     """
     Partially parse a given csv path.
     """
-    with path.open(newline="") as contents:
-        reader = DictReader(contents)
+    with path.open(newline="", encoding=encoding) as contents:
+        reader = DictReader(_nonempty(contents))
         for row in reader:
             row_date = datetime.date.strptime(date(row), "%m/%d/%Y")
             row_payee = payee(row).strip()
             yield _PartialTransaction(row_date, row_payee), row
+
+
+def _nonempty(lines: Iterable[str]):
+    for each in lines:
+        line = each.strip()
+        if line:
+            yield line
 
 
 @frozen
