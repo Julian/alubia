@@ -311,10 +311,7 @@ class Amount:
         )
 
     def __neg__(self):
-        held_at: Amount | None = (
-            None if self.held_at is None else -self.held_at
-        )
-        return evolve(self, number=-self.number, held_at=held_at)
+        return evolve(self, number=-self.number)
 
     def __truediv__(self, n: int):
         held_at: Amount | None = (
