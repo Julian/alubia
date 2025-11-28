@@ -225,6 +225,16 @@ class Account:
         return self.posting().transact(*args, **kwargs)
 
 
+def _sign(value: str):
+    if value.startswith("-"):
+        create, rest = Amount.debit, value[1:]
+    elif value.startswith("(") and value.endswith(")"):
+        create, rest = Amount.debit, value[1:-1]
+    else:
+        create, rest = Amount, value
+    return create, rest.replace(",", "")
+
+
 @frozen
 @total_ordering
 class Amount:
@@ -239,31 +249,40 @@ class Amount:
     total_cost: Amount | None = None
 
     @classmethod
+    def for_commodity(cls, commodity: str):
+        """
+        Return a callable which parses strings into the given commodity.
+        """
+
+        def parse(value: str, **kwargs: Any) -> Amount:
+            create, rest = _sign(value)
+            return create(number=Decimal(rest), commodity=commodity, **kwargs)
+
+        return parse
+
+    @classmethod
     def from_str(cls, value: str, **kwargs: Any) -> Amount:
         """
         Extract an amount from a string.
         """
-        if value.startswith("-"):
-            return -cls.from_str(value[1:], **kwargs)
-        elif value.startswith("(") and value.endswith(")"):
-            return -cls.from_str(value[1:-1], **kwargs)
+        create, rest = _sign(value)
+        match rest[0]:
+            case "$":
+                commodity = "USD"
+            case "£":
+                commodity = "GBP"
+            case "€":
+                commodity = "EUR"
+            case _:
+                raise NotImplementedError(value)
+        return create(number=Decimal(rest[1:]), commodity=commodity, **kwargs)
 
-        rest = value.replace(",", "")
-
-        commodity = kwargs.pop("commodity", None)
-        if commodity is None:
-            rest = rest[1:]
-            match value[0]:
-                case "$":
-                    commodity = "USD"
-                case "£":
-                    commodity = "GBP"
-                case "€":
-                    commodity = "EUR"
-                case _:
-                    raise NotImplementedError(value)
-
-        return cls(number=Decimal(rest), commodity=commodity, **kwargs)
+    @classmethod
+    def debit(cls, **kwargs: Any):
+        """
+        A convenience constructor for negative amounts.
+        """
+        return -cls(**kwargs)
 
     def __add__(self, other: Amount):
         if other.commodity != self.commodity:
