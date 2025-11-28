@@ -349,8 +349,11 @@ class TestAmount:
             number=Decimal(100),
             cost=Amount(commodity="USD", number=Decimal(20)).total_cost(),
         )
-        with pytest.raises(InvalidOperation, match="negative cost"):
-            -a
+        assert -a == Amount(
+            commodity="USD",
+            number=Decimal(-100),
+            cost=Amount(commodity="USD", number=Decimal(20)).total_cost(),
+        )
 
     def test_str_exact_dollar(self):
         amount = Amount(commodity="USD", number=Decimal(100))

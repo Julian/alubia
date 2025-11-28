@@ -311,10 +311,6 @@ class Amount:
         )
 
     def __neg__(self):
-        if self.cost:
-            raise InvalidOperation(
-                "Beancount does not support negative costs.",
-            )
         held_at: Amount | None = (
             None if self.held_at is None else -self.held_at
         )
