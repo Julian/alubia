@@ -252,13 +252,13 @@ class TestAmount:
             commodity="USD",
             number=Decimal(100),
             held_at=Amount(commodity="USD", number=Decimal(50)),
-            total_cost=Amount(commodity="USD", number=Decimal(20)),
+            cost=Amount(commodity="USD", number=Decimal(20)).total_cost(),
         )
         assert a / 2 == Amount(
             commodity="USD",
             number=Decimal(50),
             held_at=Amount(commodity="USD", number=Decimal(25)),
-            total_cost=Amount(commodity="USD", number=Decimal(10)),
+            cost=Amount(commodity="USD", number=Decimal(10)).total_cost(),
         )
 
     def test_div_held_at_different_units(self):
@@ -277,12 +277,12 @@ class TestAmount:
         a = Amount(
             commodity="USD",
             number=Decimal(100),
-            total_cost=Amount(commodity="EUR", number=Decimal(20)),
+            cost=Amount(commodity="EUR", number=Decimal(20)).total_cost(),
         )
         assert a / 2 == Amount(
             commodity="USD",
             number=Decimal(50),
-            total_cost=Amount(commodity="EUR", number=Decimal(10)),
+            cost=Amount(commodity="EUR", number=Decimal(10)).total_cost(),
         )
 
     def test_add_incompatible_commodities(self):
@@ -321,12 +321,12 @@ class TestAmount:
         a1 = Amount(
             commodity="USD",
             number=Decimal(100),
-            total_cost=Amount(commodity="USD", number=Decimal(10)),
+            cost=Amount(commodity="USD", number=Decimal(10)).total_cost(),
         )
         a2 = Amount(
             commodity="USD",
             number=Decimal(200),
-            total_cost=Amount(commodity="EUR", number=Decimal(20)),
+            cost=Amount(commodity="EUR", number=Decimal(20)).total_cost(),
         )
         with pytest.raises(TypeError):
             a1 + a2
@@ -335,7 +335,7 @@ class TestAmount:
         a1 = Amount(
             commodity="USD",
             number=Decimal(100),
-            total_cost=Amount(commodity="USD", number=Decimal(50)),
+            cost=Amount(commodity="USD", number=Decimal(50)).total_cost(),
         )
         a2 = Amount(commodity="USD", number=Decimal(200))
         with pytest.raises(InvalidOperation):
@@ -347,7 +347,7 @@ class TestAmount:
         a = Amount(
             commodity="USD",
             number=Decimal(100),
-            total_cost=Amount(commodity="USD", number=Decimal(20)),
+            cost=Amount(commodity="USD", number=Decimal(20)).total_cost(),
         )
         with pytest.raises(InvalidOperation, match="negative cost"):
             -a
@@ -393,9 +393,17 @@ class TestAmount:
         amount = Amount(
             commodity="FOO",
             number=Decimal(37),
-            total_cost=USD100,
+            cost=USD100.total_cost(),
         )
         assert str(amount) == "37 FOO @@ 100.00 USD"
+
+    def test_str_unit_cost(self):
+        amount = Amount(
+            commodity="FOO",
+            number=Decimal(37),
+            cost=USD100.unit_cost(),
+        )
+        assert str(amount) == "37 FOO @ 100.00 USD"
 
 
 class TestCommented:

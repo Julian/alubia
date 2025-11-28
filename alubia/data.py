@@ -246,7 +246,7 @@ class Amount:
     commodity: str
     label: str = ""
     held_at: Amount | None = None
-    total_cost: Amount | None = None
+    cost: _TotalCost | _UnitCost | None = None
 
     @classmethod
     def for_commodity(cls, commodity: str):
@@ -296,12 +296,12 @@ class Amount:
         elif other.held_at:
             return NotImplemented
 
-        total_cost = self.total_cost
-        if total_cost is not None:
-            if other.total_cost is None:
-                raise InvalidOperation("Incompatible total costs")
-            total_cost += other.total_cost
-        elif other.total_cost is not None:
+        cost = self.cost
+        if cost is not None:
+            if other.cost is None:
+                raise InvalidOperation("Incompatible costs")
+            cost += other.cost
+        elif other.cost is not None:
             raise InvalidOperation("Incompatible total costs")
 
         return evolve(
@@ -311,7 +311,7 @@ class Amount:
         )
 
     def __neg__(self):
-        if self.total_cost:
+        if self.cost:
             raise InvalidOperation(
                 "Beancount does not support negative costs.",
             )
@@ -324,14 +324,12 @@ class Amount:
         held_at: Amount | None = (
             None if self.held_at is None else self.held_at / n
         )
-        total_cost: Amount | None = (
-            None if self.total_cost is None else self.total_cost / n
-        )
+        cost: Amount | None = None if self.cost is None else self.cost / n
         return evolve(
             self,
             number=self.number / n,
             held_at=held_at,
-            total_cost=total_cost,
+            cost=cost,
         )
 
     def __lt__(self, other: Amount):
@@ -360,15 +358,48 @@ class Amount:
             parts.append(f'"{self.label}"')
         braced = f" {{{', '.join(parts)}}}" if parts else ""
 
-        cost = f" @@ {self.total_cost}" if self.total_cost else ""
-
+        cost = "" if self.cost is None else str(self.cost)
         return f"{self.number} {self.commodity}{braced}{cost}"
+
+    def total_cost(self):
+        """
+        A total cost of this amount.
+        """
+        return _TotalCost(amount=self)
+
+    def unit_cost(self):
+        """
+        A unit cost of this amount.
+        """
+        return _UnitCost(amount=self)
 
     def zero(self):
         """
         Zero in this commodity.
         """
         return evolve(self, number=Decimal(0))
+
+
+@frozen
+class _TotalCost:
+    amount: Amount
+
+    def __str__(self):
+        return f" @@ {self.amount}"
+
+    def __truediv__(self, n: int):
+        return evolve(self, amount=self.amount / n)
+
+
+@frozen
+class _UnitCost:
+    amount: Amount
+
+    def __str__(self):
+        return f" @ {self.amount}"
+
+    def __truediv__(self, n: int):
+        return evolve(self, amount=self.amount / n)
 
 
 @frozen
