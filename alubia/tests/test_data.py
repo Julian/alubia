@@ -317,6 +317,23 @@ class TestAmount:
         with pytest.raises(TypeError):
             a2 + a1
 
+    def test_add_one_side_has_total_cost(self):
+        a1 = Amount(
+            commodity="USD",
+            number=Decimal(100),
+            cost=Amount(commodity="USD", number=Decimal(50)).total_cost(),
+        )
+        a2 = Amount(commodity="USD", number=Decimal(200))
+        assert (
+            a1 + a2
+            == a2 + a1
+            == Amount(
+                commodity="USD",
+                number=Decimal(300),
+                cost=Amount(commodity="USD", number=Decimal(50)).total_cost(),
+            )
+        )
+
     def test_add_incompatible_total_cost(self):
         a1 = Amount(
             commodity="USD",
@@ -328,20 +345,8 @@ class TestAmount:
             number=Decimal(200),
             cost=Amount(commodity="EUR", number=Decimal(20)).total_cost(),
         )
-        with pytest.raises(TypeError):
-            a1 + a2
-
-    def test_add_one_side_has_total_cost(self):
-        a1 = Amount(
-            commodity="USD",
-            number=Decimal(100),
-            cost=Amount(commodity="USD", number=Decimal(50)).total_cost(),
-        )
-        a2 = Amount(commodity="USD", number=Decimal(200))
         with pytest.raises(InvalidOperation):
             a1 + a2
-        with pytest.raises(InvalidOperation):
-            a2 + a1
 
     def test_neg_with_total_cost(self):
         a = Amount(

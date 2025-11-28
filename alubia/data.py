@@ -297,15 +297,14 @@ class Amount:
             return NotImplemented
 
         cost = self.cost
-        if cost is not None:
-            if other.cost is None:
-                raise InvalidOperation("Incompatible costs")
-            cost += other.cost
-        elif other.cost is not None:
-            raise InvalidOperation("Incompatible total costs")
+        if cost is None:
+            cost = other.cost
+        elif other.cost is not None and other.cost != self.cost:
+            raise InvalidOperation("Incompatible costs")
 
         return evolve(
             self,
+            cost=cost,
             number=self.number + other.number,
             held_at=held_at,
         )
@@ -317,7 +316,7 @@ class Amount:
         held_at: Amount | None = (
             None if self.held_at is None else self.held_at / n
         )
-        cost: Amount | None = None if self.cost is None else self.cost / n
+        cost = None if self.cost is None else self.cost / n
         return evolve(
             self,
             number=self.number / n,
