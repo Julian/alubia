@@ -413,6 +413,12 @@ class TestAmount:
         )
         assert str(amount) == "37 FOO @ 100.00 USD"
 
+    def test_bool_nonzero(self):
+        assert USD100
+
+    def test_bool_zero(self):
+        assert not USD100.zero()
+
 
 class TestCommented:
     def test_transaction(self):

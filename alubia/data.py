@@ -293,6 +293,9 @@ class Amount:
             held_at=held_at,
         )
 
+    def __bool__(self):
+        return bool(self.number)
+
     def __neg__(self):
         return evolve(self, number=-self.number)
 
