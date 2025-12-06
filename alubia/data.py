@@ -101,22 +101,6 @@ class Transaction:
         return "\n".join(lines)
 
 
-class _PostingLike(Protocol):
-    """
-    A thing which can be treated like a posting.
-
-    Basically a posting or an account.
-    """
-
-    def posting(self) -> Posting: ...
-
-    def transact(
-        self,
-        *postings: _PostingLike,
-        **kwargs: Any,
-    ) -> Transaction: ...
-
-
 @frozen
 class Posting:
     """
@@ -142,7 +126,7 @@ class Posting:
         padding = width - len(amount)
         return f"{self._account:<{padding}}{amount}"
 
-    def transact(self, *postings: _PostingLike, **kwargs: Any) -> Transaction:
+    def transact(self, *postings: _PostingLike, **kwargs: Any):
         """
         Create a transaction with this posting in it.
         """
@@ -402,12 +386,46 @@ class _Commented:
 
     _wrapped: Transaction
 
+    def commented(self):
+        """
+        We're already there.
+        """
+        return self
+
     def explicit(self):
         return self.__class__(self._wrapped.explicit())
 
     def serialize(self, width: int = _DEFAULT_WIDTH):
         serialized: str = self._wrapped.serialize(width - 2)
         return "".join(f"; {line}" for line in serialized.splitlines(True))
+
+
+class _PostingLike(Protocol):
+    """
+    A thing which can be treated like a posting.
+
+    Basically a posting or an account.
+    """
+
+    def posting(self) -> Posting: ...
+
+    def transact(
+        self,
+        *postings: _PostingLike,
+        **kwargs: Any,
+    ) -> Transaction: ...
+
+
+class _TransactionLike(Protocol):
+    """
+    A thing which can be treated like a transaction.
+    """
+
+    def commented(self) -> _TransactionLike: ...
+
+    def explicit(self) -> _TransactionLike: ...
+
+    def serialize(self, width: int = _DEFAULT_WIDTH) -> str: ...
 
 
 Assets = Account(["Assets"])

@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from alubia.data import (
         Transaction,
         _PostingLike,  # type: ignore[reportPrivateUsage]
+        _TransactionLike,  # type: ignore[reportPrivateUsage]
     )
 
 
@@ -81,3 +82,10 @@ class _PartialTransaction:
             date=self.date,
             payee=self.payee,
         )
+
+    def commented(
+        self,
+        *args: _PostingLike,
+        **kwargs: Any,
+    ) -> _TransactionLike:
+        return self(*args, **kwargs).commented()
