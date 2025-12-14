@@ -104,5 +104,11 @@ def typing(session):
     """
     Statically check typing annotations.
     """
-    session.install("pyright", ROOT)
-    session.run("pyright", PACKAGE)
+    session.run_install(
+        "uv",
+        "sync",
+        "--group=typing",
+        f"--python={session.virtualenv.location}",
+        env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
+    )
+    session.run("pyright", *session.posargs, PACKAGE)

@@ -28,8 +28,8 @@ classifiers = [
 ]
 dynamic = ["version"]
 dependencies = [
-    "attrs>=25.4.0",
-    "rpds-py>=0.29.0",
+  "attrs>=25.4.0",
+  "rpds-py>=0.29.0",
 ]
 
 [project.urls]
@@ -41,6 +41,9 @@ Source = "https://github.com/Julian/alubia"
 [dependency-groups]
 test = [
   "pytest",
+]
+typing = [
+  "pyright>=1.1.407",
 ]
 
 [tool.coverage.html]
