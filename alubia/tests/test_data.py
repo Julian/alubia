@@ -1,5 +1,5 @@
+from _pydecimal import Decimal, InvalidOperation as InvalidDecimalOperation
 from datetime import date
-from decimal import Decimal, InvalidOperation as InvalidDecimalOperation
 from textwrap import dedent
 
 import pytest
