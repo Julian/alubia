@@ -4,7 +4,7 @@ Something like beancount's own API with some niceties.
 
 from __future__ import annotations
 
-from decimal import Decimal
+from _pydecimal import Decimal  # the C module obfuscates exception messages
 from functools import total_ordering
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
