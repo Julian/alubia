@@ -45,11 +45,11 @@ class TestAccount:
     def test_transact(self):
         assert BANK.transact(
             Liabilities.Credit.Visa.posting(amount=USD100),
-            date=date.today(),
+            date=TODAY,
             payee="Foo",
         ) == Transaction(
             payee="Foo",
-            date=date.today(),
+            date=TODAY,
             postings=[
                 BANK.posting(),
                 Liabilities.Credit.Visa.posting(amount=USD100),
@@ -82,12 +82,12 @@ class TestPosting:
         posting = BANK.posting(amount=USD100)
         transaction = posting.transact(
             Liabilities.Credit.Visa.posting(),
-            date=date.today(),
+            date=TODAY,
             payee="Foo Bar",
         )
         assert transaction == Transaction(
             payee="Foo Bar",
-            date=date.today(),
+            date=TODAY,
             postings=[
                 BANK.posting(amount=USD100),
                 Liabilities.Credit.Visa.posting(),
@@ -99,10 +99,10 @@ class TestPosting:
         transaction = posting.transact(
             Liabilities.Credit.Visa,
             payee="Baz Quux",
-            date=date.today(),
+            date=TODAY,
         )
         assert transaction == Transaction(
-            date=date.today(),
+            date=TODAY,
             payee="Baz Quux",
             postings=[
                 BANK.posting(amount=USD100),
