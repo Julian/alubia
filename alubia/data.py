@@ -107,8 +107,9 @@ class Posting:
     A leg of a transaction (i.e. a single account and amount).
     """
 
-    _account: Account = field(alias="account", repr=str)
+    account: Account = field(alias="account", repr=str)
     amount: Amount | None = field(default=None)
+    comment: str | None = field(default=None)
 
     def __neg__(self):
         if self.amount is None:
@@ -119,12 +120,13 @@ class Posting:
         """
         Export this posting to beancount's line format.
         """
-        amount = str(self.amount or "")
-        if not amount:
-            return self._account
+        comment = f" ; {self.comment}" if self.comment else ""
+        if not self.amount:
+            return f"{self.account}{comment}"
 
+        amount = str(self.amount)
         padding = width - len(amount)
-        return f"{self._account:<{padding}}{amount}"
+        return f"{self.account:<{padding}}{amount}{comment}"
 
     def transact(self, *postings: _PostingLike, **kwargs: Any):
         """

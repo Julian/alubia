@@ -64,10 +64,19 @@ BANK = Assets.Bank.Checking
 
 
 class TestPosting:
-    def test_posting_negation(self):
-        account = Assets.Bank.Checking
-        posting = Posting(account=account, amount=USD100)
-        assert -posting == Posting(account=account, amount=-USD100)
+    def test_negation(self):
+        posting = Posting(account=BANK, amount=USD100)
+        assert -posting == Posting(account=BANK, amount=-USD100)
+
+    def test_comment(self):
+        posting = Posting(account=BANK, amount=USD100, comment="Foo bar")
+        assert posting.serialize(40) == (
+            "Assets:Bank:Checking          100.00 USD ; Foo bar"
+        )
+
+    def test_implicit_with_comment(self):
+        posting = Posting(account=BANK, comment="Only a comment")
+        assert posting.serialize(40) == "Assets:Bank:Checking ; Only a comment"
 
     def test_transact(self):
         posting = BANK.posting(amount=USD100)
