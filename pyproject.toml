@@ -32,6 +32,9 @@ dependencies = [
   "rpds-py>=0.29.0",
 ]
 
+[project.optional-dependencies]
+pdf = ["pymupdf"]
+
 [project.urls]
 Homepage = "https://github.com/Julian/alubia"
 Issues = "https://github.com/Julian/alubia/issues/"

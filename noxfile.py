@@ -107,6 +107,7 @@ def typing(session):
     session.run_install(
         "uv",
         "sync",
+        "--extra=pdf",
         "--group=typing",
         f"--python={session.virtualenv.location}",
         env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
