@@ -44,6 +44,7 @@ Source = "https://github.com/Julian/alubia"
 [dependency-groups]
 test = [
   "pytest",
+  "pytest-sugar",
 ]
 typing = [
   { include-group = "test" },
