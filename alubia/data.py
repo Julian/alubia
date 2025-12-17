@@ -16,7 +16,6 @@ from alubia.exceptions import InvalidOperation, InvalidTransaction
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
     from datetime import date
-    from numbers import Number
 
     from attrs import Attribute
 
@@ -39,7 +38,7 @@ class Transaction:
     payee: str
     narration: str = ""
 
-    @postings.validator  # type: ignore[reportAttributeAccessIssue]
+    @postings.validator  # ty:ignore[unresolved-attribute] (ty#267)
     def _check(
         self,
         attribute: Attribute[Sequence[Posting]],
@@ -66,7 +65,7 @@ class Transaction:
 
         implicit: int | None = None
         commodities: set[str] = set()
-        total: Amount | Literal[0] = 0
+        total: Amount | int = 0
         postings: list[Posting | None] = []
         for i, posting in enumerate(self.postings):
             if posting.amount is None:
@@ -76,7 +75,7 @@ class Transaction:
             else:
                 commodities.add(posting.amount.commodity)
                 if len(commodities) == 1:  # otherwise we'll fail if implicit
-                    total += posting.amount  # type: ignore[reportOperatorIssue]
+                    total += posting.amount
                     postings.append(posting)
         if implicit is None:
             return self
@@ -204,7 +203,7 @@ class Account:
         """
         return Posting(account=self, **kwargs)
 
-    def transact[**P](self, *args: Posting, **kwargs: P.kwargs):  # type: ignore[reportGeneralTypeIssues]
+    def transact[**P](self, *args: Posting, **kwargs: P.kwargs):
         """
         Transact on this account as an implicit posting.
         """
@@ -274,7 +273,7 @@ class Amount:
         if other.commodity != self.commodity:
             return NotImplemented
 
-        held_at: Amount | None = self.held_at
+        held_at = self.held_at
         if held_at:
             if not other.held_at:
                 return NotImplemented
@@ -313,8 +312,8 @@ class Amount:
             cost=cost,
         )
 
-    def __lt__(self, other: Amount):
-        if other == 0:  # type: ignore[reportUnnecessaryComparison] um. wut?
+    def __lt__(self, other: Amount | Literal[0]):
+        if other == 0:
             other = self.zero()
         elif (
             self.__class__ is not other.__class__
@@ -323,13 +322,13 @@ class Amount:
             return NotImplemented
         return self.number < other.number
 
-    def __radd__(self, other: Number):
-        if other != 0:  # type: ignore[reportUnnecessaryComparison] um. wut?
+    def __radd__(self, other: Literal[0]):
+        if other != 0:
             return NotImplemented
         return self
 
-    def __rmul__(self, other: Number):
-        return evolve(self, number=other * self.number)  # type: ignore[reportOperatorIssue]
+    def __rmul__(self, other: Decimal):
+        return evolve(self, number=other * self.number)
 
     def __str__(self):
         parts: list[str] = []
@@ -433,7 +432,7 @@ class _TransactionLike(Protocol):
     def serialize(self, width: int = _DEFAULT_WIDTH) -> str: ...
 
 
-Assets = Account(["Assets"])
-Expenses = Account(["Expenses"])
-Income = Account(["Income"])
-Liabilities = Account(["Liabilities"])
+Assets = Account(["Assets"])  # ty:ignore[invalid-argument-type] (ty#972)
+Expenses = Account(["Expenses"])  # ty:ignore[invalid-argument-type] (ty#972)
+Income = Account(["Income"])  # ty:ignore[invalid-argument-type] (ty#972)
+Liabilities = Account(["Liabilities"])  # ty:ignore[invalid-argument-type] (ty#972)

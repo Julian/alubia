@@ -112,4 +112,4 @@ def typing(session):
         f"--python={session.virtualenv.location}",
         env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
     )
-    session.run("pyright", *session.posargs, PACKAGE)
+    session.run("ty", "check", *session.posargs, PACKAGE)

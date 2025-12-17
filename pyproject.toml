@@ -46,7 +46,8 @@ test = [
   "pytest",
 ]
 typing = [
-  "pyright>=1.1.407",
+  { include-group = "test" },
+  "ty",
 ]
 
 [tool.coverage.html]
@@ -70,14 +71,6 @@ skip_covered = true
 ignore = [
   "D000",  # see PyCQA/doc8#125
   "D001",  # one sentence per line, so max length doesn't make sense
-]
-
-[tool.pyright]
-reportUnnecessaryTypeIgnoreComment = true
-strict = ["**/*"]
-exclude = [
-  "**/tests/__init__.py",
-  "**/tests/test_*.py",
 ]
 
 [tool.ruff]
@@ -148,3 +141,6 @@ from-first = true
 "noxfile.py" = ["ANN", "D100", "S101", "T201"]
 "docs/*" = ["ANN", "D", "INP001"]
 "alubia/tests/*" = ["ANN", "B018", "BLE001", "D", "DTZ", "PERF", "S"]
+
+[tool.ty.terminal]
+error-on-warning = true

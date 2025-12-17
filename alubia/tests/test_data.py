@@ -233,11 +233,17 @@ class TestAmount:
     def test_neg(self):
         assert -USD100 == Amount(commodity="USD", number=Decimal(-100))
 
-    def test_gt(self):
-        assert USD100 > 0
-
     def test_lt(self):
         assert USD100 < USD200
+
+    def test_lt_zero(self):
+        assert 0 < USD100  # ty:ignore[unsupported-operator] wut?
+
+    def test_gt(self):
+        assert USD200 > USD100
+
+    def test_gt_zero(self):
+        assert USD100 > 0  # ty:ignore[unsupported-operator] wut?
 
     def test_add_with_held_at(self):
         a1 = Amount(
