@@ -42,6 +42,7 @@ def from_csv(
     path: Path,
     date: Callable[[Row], datetime.date] = _to_date,
     payee: Callable[[Row], str] = lambda row: row["Description"],
+    narration: Callable[[Row], str | None] = lambda row: None,
     encoding: str | None = None,
 ) -> Iterable[tuple[_PartialTransaction, dict[str, Any]]]:
     """
@@ -50,8 +51,12 @@ def from_csv(
     with path.open(newline="", encoding=encoding) as contents:
         reader = DictReader(_nonempty(contents))
         for row in reader:
-            row_payee = payee(row).strip()
-            yield _PartialTransaction(date(row), row_payee), row
+            partial = _PartialTransaction(
+                date=date(row),
+                payee=payee(row).strip(),
+                narration=narration(row),
+            )
+            yield partial, row
 
 
 def _nonempty(lines: Iterable[str]):
@@ -69,6 +74,7 @@ class _PartialTransaction:
 
     date: datetime.date
     payee: str
+    narration: str | None
 
     def __call__(
         self,
@@ -76,6 +82,7 @@ class _PartialTransaction:
         *args: _PostingLike,
         **kwargs: Any,
     ) -> Transaction:
+        kwargs.setdefault("narration", self.narration)
         return first.transact(
             *args,
             **kwargs,
