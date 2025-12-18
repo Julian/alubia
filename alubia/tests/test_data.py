@@ -204,6 +204,14 @@ class TestAmount:
         with pytest.raises(InvalidDecimalOperation):
             Amount.for_commodity("STUFF")("$100.00")
 
+    def test_for_commodity_int(self):
+        GBP = Amount.for_commodity("GBP")
+        assert GBP(100) == GBP100
+
+    def test_for_commodity_negative_int(self):
+        USD = Amount.for_commodity("USD")
+        assert USD(-200) == -USD200
+
     def test_from_str_dollars(self):
         amount = Amount.from_str("$100.00")
         assert amount == Amount(commodity="USD", number=Decimal(100))

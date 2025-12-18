@@ -210,7 +210,10 @@ class Account:
         return self.posting().transact(*args, **kwargs)
 
 
-def _sign(value: str):
+def _sign(value: str | int):
+    if isinstance(value, int):
+        return Amount, value
+
     if value.startswith("-"):
         create, rest = Amount.debit, value[1:]
     elif value.startswith("(") and value.endswith(")"):
