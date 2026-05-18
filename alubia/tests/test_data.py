@@ -5,6 +5,7 @@ from textwrap import dedent
 import pytest
 
 from alubia.data import (
+    Account,
     Amount,
     Assets,
     Expenses,
@@ -58,6 +59,16 @@ class TestAccount:
 
     def test_flagged(self):
         assert str(~Assets.Bank.Checking) == "! Assets:Bank:Checking"
+
+    def test_from_str(self):
+        assert Account.from_str("Assets:Bank:Checking") == Assets.Bank.Checking
+
+    def test_from_str_flagged(self):
+        assert Account.from_str("! Expenses:Unknown") == ~Expenses.Unknown
+
+    def test_from_str_roundtrips(self):
+        for account in [Assets.Bank.Checking, ~Expenses.Unknown, Income]:
+            assert Account.from_str(str(account)) == account
 
 
 BANK = Assets.Bank.Checking

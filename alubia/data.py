@@ -155,6 +155,16 @@ class Account:
     )
     _prefix: str = field(alias="prefix", default="")
 
+    @classmethod
+    def from_str(cls, value: str) -> Account:
+        """
+        Parse a beancount account string, optionally flagged with leading '! '.
+        """
+        prefix = ""
+        if value.startswith("! "):
+            prefix, value = "! ", value[2:]
+        return cls(parts=value.split(":"), prefix=prefix)
+
     def __getattr__(self, name: str):
         """
         Get a child of this account if the name part is valid.
