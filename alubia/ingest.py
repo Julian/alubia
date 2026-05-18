@@ -10,7 +10,7 @@ import datetime
 import json
 import re
 
-from attrs import field, frozen
+from attrs import evolve, field, frozen
 
 from alubia.data import Account
 
@@ -69,15 +69,59 @@ def _nonempty(lines: Iterable[str]):
             yield line
 
 
+def pascal(name: str) -> str:
+    """
+    PascalCase a free-form name: ``"MARY-ANNE FRY"`` -> ``"MaryAnneFry"``.
+    """
+    return name.title().replace(" ", "").replace("-", "")
+
+
+def as_is(name: str) -> str:
+    """
+    Return ``name`` unchanged.
+    """
+    return name
+
+
+SANITIZERS: dict[str, Callable[[str], str]] = {
+    "pascal": pascal,
+    "as-is": as_is,
+}
+
+
 @frozen
 class Match:
     """
     A successful rule lookup: which kind of rule fired, its key, the account.
     """
 
-    kind: Literal["exact", "prefix"]
+    kind: Literal["exact", "prefix", "dynamic"]
     key: str
     account: Account
+
+
+@frozen
+class DynamicRule:
+    """
+    A prefix-with-template rule for dynamic account lookups.
+
+    Strips ``prefix`` off the payee, sanitizes the remainder, and returns
+    ``under[sanitized_remainder]``. For example,
+    ``DynamicRule("ZELLE FROM ", Income.DirectPay, pascal)`` maps
+    ``"ZELLE FROM Mary-Anne"`` to ``Income:DirectPay:MaryAnne``.
+    """
+
+    prefix: str
+    under: Account
+    sanitize: Callable[[str], str] = field(default=as_is)
+
+    def match(self, payee: str) -> Account | None:
+        """
+        Return the resolved child account, or ``None`` if no prefix match.
+        """
+        if not payee.startswith(self.prefix):
+            return None
+        return self.under[self.sanitize(payee.removeprefix(self.prefix))]
 
 
 @frozen
@@ -85,14 +129,16 @@ class RuleTable:
     """
     A table of payee -> account rules.
 
-    Rules are checked in the order: ``exact`` (full string match), then
-    ``prefix`` (first matching prefix in insertion order wins). ``match``
-    returns ``None`` when nothing matched so callers can pick their own
-    sentinel (e.g. ``~Expenses.Unknown``).
+    Rules are checked in the order: ``exact`` (full string match), ``prefix``
+    (first matching prefix in insertion order wins), then ``dynamic`` (prefix
+    plus sanitized-name lookup under a root account). ``match`` returns
+    ``None`` when nothing matched so callers can pick their own sentinel
+    (e.g. ``~Expenses.Unknown``).
     """
 
     exact: Mapping[str, Account] = field(factory=dict)
     prefix: Mapping[str, Account] = field(factory=dict)
+    dynamic: tuple[DynamicRule, ...] = field(factory=tuple, converter=tuple)
 
     def match(self, payee: str) -> Account | None:
         """
@@ -110,6 +156,10 @@ class RuleTable:
         for prefix, account in self.prefix.items():
             if payee.startswith(prefix):
                 return Match(kind="prefix", key=prefix, account=account)
+        for rule in self.dynamic:
+            account = rule.match(payee)
+            if account is not None:
+                return Match(kind="dynamic", key=rule.prefix, account=account)
         return None
 
     def tracked(self) -> Tracker:
@@ -117,6 +167,12 @@ class RuleTable:
         Wrap this table in a `Tracker` that records which rules fire.
         """
         return Tracker(rules=self)
+
+    def with_dynamic(self, *rules: DynamicRule) -> RuleTable:
+        """
+        Return a new table with the given dynamic rules appended.
+        """
+        return evolve(self, dynamic=self.dynamic + tuple(rules))
 
     def validate(self) -> list[str]:
         """
@@ -142,6 +198,24 @@ class RuleTable:
             for longer in prefixes[i + 1 :]
             if longer.startswith(shorter)
         )
+
+        for rule in self.dynamic:
+            for regular in self.prefix:
+                if rule.prefix.startswith(regular):
+                    issues.append(
+                        f"dynamic prefix {rule.prefix!r} is unreachable: "
+                        f"regular prefix {regular!r} matches first",
+                    )
+                    break
+
+        dynamic_prefixes = [r.prefix for r in self.dynamic]
+        issues.extend(
+            f"dynamic prefix {longer!r} is unreachable: "
+            f"earlier dynamic prefix {shorter!r} matches first"
+            for i, shorter in enumerate(dynamic_prefixes)
+            for longer in dynamic_prefixes[i + 1 :]
+            if longer.startswith(shorter)
+        )
         return issues
 
     @classmethod
@@ -151,16 +225,33 @@ class RuleTable:
         """
         exact: dict[str, Account] = {}
         prefix: dict[str, Account] = {}
+        dynamic: list[DynamicRule] = []
         for table in tables:
             exact.update(table.exact)
             prefix.update(table.prefix)
-        return cls(exact=exact, prefix=prefix)
+            dynamic.extend(table.dynamic)
+        return cls(exact=exact, prefix=prefix, dynamic=tuple(dynamic))
 
     @classmethod
-    def from_mapping(cls, data: Mapping[str, Mapping[str, str]]) -> RuleTable:
+    def from_mapping(cls, data: Mapping[str, Any]) -> RuleTable:
         """
-        Build a table from a nested mapping with ``exact`` / ``prefix`` keys.
+        Build a table from a mapping with exact/prefix/dynamic sections.
         """
+        dynamic: list[DynamicRule] = []
+        for entry in data.get("dynamic", ()):
+            sanitize_name = entry.get("sanitize", "as-is")
+            if sanitize_name not in SANITIZERS:
+                raise ValueError(
+                    f"unknown sanitizer {sanitize_name!r}; "
+                    f"known: {sorted(SANITIZERS)}",
+                )
+            dynamic.append(
+                DynamicRule(
+                    prefix=entry["prefix"],
+                    under=Account.from_str(entry["under"]),
+                    sanitize=SANITIZERS[sanitize_name],
+                ),
+            )
         return cls(
             exact={
                 k: Account.from_str(v)
@@ -170,6 +261,7 @@ class RuleTable:
                 k: Account.from_str(v)
                 for k, v in data.get("prefix", {}).items()
             },
+            dynamic=tuple(dynamic),
         )
 
     @classmethod
@@ -211,16 +303,26 @@ class Tracker:
     def unused(self) -> list[Match]:
         """
         Rules that never matched anything during this tracker's lifetime.
+
+        For dynamic rules, ``account`` is the rule's ``under`` root account.
         """
-        return [
-            Match(kind="exact", key=key, account=account)
-            for key, account in self.rules.exact.items()
-            if ("exact", key) not in self._hits
-        ] + [
-            Match(kind="prefix", key=key, account=account)
-            for key, account in self.rules.prefix.items()
-            if ("prefix", key) not in self._hits
-        ]
+        return (
+            [
+                Match(kind="exact", key=key, account=account)
+                for key, account in self.rules.exact.items()
+                if ("exact", key) not in self._hits
+            ]
+            + [
+                Match(kind="prefix", key=key, account=account)
+                for key, account in self.rules.prefix.items()
+                if ("prefix", key) not in self._hits
+            ]
+            + [
+                Match(kind="dynamic", key=rule.prefix, account=rule.under)
+                for rule in self.rules.dynamic
+                if ("dynamic", rule.prefix) not in self._hits
+            ]
+        )
 
 
 @frozen

@@ -2,8 +2,16 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from alubia.data import Assets, Expenses, Income
-from alubia.ingest import Match, RuleTable
+from alubia.ingest import (
+    DynamicRule,
+    Match,
+    RuleTable,
+    as_is,
+    pascal,
+)
 
 
 class TestRuleTable:
@@ -182,6 +190,145 @@ class TestTracker:
         ]
 
 
+class TestSanitizers:
+    def test_pascal_basic(self):
+        assert pascal("mary anne") == "MaryAnne"
+
+    def test_pascal_hyphenated(self):
+        assert pascal("MARY-ANNE FRY") == "MaryAnneFry"
+
+    def test_pascal_single(self):
+        assert pascal("bob") == "Bob"
+
+    def test_as_is(self):
+        assert as_is("Mary-Anne Fry") == "Mary-Anne Fry"
+
+
+class TestDynamicRule:
+    def test_match(self):
+        rule = DynamicRule("ZELLE FROM ", Income.DirectPay, pascal)
+        assert rule.match("ZELLE FROM mary anne") == Income.DirectPay.MaryAnne
+
+    def test_no_match(self):
+        rule = DynamicRule("ZELLE FROM ", Income.DirectPay, pascal)
+        assert rule.match("CHECK NUMBER 401") is None
+
+    def test_default_sanitizer_is_identity(self):
+        rule = DynamicRule("X ", Income.A)
+        assert rule.match("X foo bar") == Income.A["foo bar"]
+
+
+class TestRuleTableDynamic:
+    def test_match_falls_through_to_dynamic(self):
+        table = RuleTable(
+            dynamic=(DynamicRule("ZELLE FROM ", Income.DirectPay, pascal),),
+        )
+        assert table.match("ZELLE FROM bob") == Income.DirectPay.Bob
+
+    def test_match_rule_returns_dynamic_kind(self):
+        table = RuleTable(
+            dynamic=(DynamicRule("ZELLE FROM ", Income.DirectPay, pascal),),
+        )
+        assert table.match_rule("ZELLE FROM bob") == Match(
+            kind="dynamic",
+            key="ZELLE FROM ",
+            account=Income.DirectPay.Bob,
+        )
+
+    def test_exact_beats_dynamic(self):
+        table = RuleTable(
+            exact={"ZELLE FROM bob": Income.Special},
+            dynamic=(DynamicRule("ZELLE FROM ", Income.DirectPay, pascal),),
+        )
+        assert table.match("ZELLE FROM bob") == Income.Special
+
+    def test_prefix_beats_dynamic(self):
+        table = RuleTable(
+            prefix={"ZELLE FROM bob": Income.Special},
+            dynamic=(DynamicRule("ZELLE FROM ", Income.DirectPay, pascal),),
+        )
+        assert table.match("ZELLE FROM bob smith") == Income.Special
+
+    def test_first_dynamic_wins(self):
+        table = RuleTable(
+            dynamic=(
+                DynamicRule("ZELLE ", Income.A),
+                DynamicRule("ZELLE FROM ", Income.B),
+            ),
+        )
+        m = table.match_rule("ZELLE FROM bob")
+        assert m is not None
+        assert m.key == "ZELLE "
+
+    def test_with_dynamic_appends(self):
+        rule1 = DynamicRule("A ", Income.A)
+        rule2 = DynamicRule("B ", Income.B)
+        table = RuleTable().with_dynamic(rule1).with_dynamic(rule2)
+        assert table.dynamic == (rule1, rule2)
+
+
+class TestRuleTableValidateDynamic:
+    def test_regular_prefix_shadows_dynamic(self):
+        table = RuleTable(
+            prefix={"ZELLE ": Income.A},
+            dynamic=(DynamicRule("ZELLE FROM ", Income.DirectPay),),
+        )
+        issues = table.validate()
+        assert any(
+            "dynamic prefix 'ZELLE FROM '" in i and "unreachable" in i
+            for i in issues
+        )
+
+    def test_dynamic_shadows_dynamic(self):
+        table = RuleTable(
+            dynamic=(
+                DynamicRule("ZELLE ", Income.A),
+                DynamicRule("ZELLE FROM ", Income.B),
+            ),
+        )
+        issues = table.validate()
+        assert any(
+            "dynamic prefix 'ZELLE FROM '" in i and "unreachable" in i
+            for i in issues
+        )
+
+    def test_clean_with_dynamic(self):
+        table = RuleTable(
+            exact={"FOO": Income.A},
+            prefix={"BAR ": Income.B},
+            dynamic=(DynamicRule("ZELLE FROM ", Income.DirectPay, pascal),),
+        )
+        assert table.validate() == []
+
+
+class TestRuleTableMergeDynamic:
+    def test_merge_concatenates_dynamic(self):
+        rule1 = DynamicRule("A ", Income.A)
+        rule2 = DynamicRule("B ", Income.B)
+        a = RuleTable(dynamic=(rule1,))
+        b = RuleTable(dynamic=(rule2,))
+        assert RuleTable.merge(a, b).dynamic == (rule1, rule2)
+
+
+class TestTrackerDynamic:
+    def test_records_dynamic_hit(self):
+        rule = DynamicRule("ZELLE FROM ", Income.DirectPay, pascal)
+        tracker = RuleTable(dynamic=(rule,)).tracked()
+        tracker.match("ZELLE FROM bob")
+        assert tracker.unused() == []
+
+    def test_unused_dynamic_reports_under(self):
+        rule = DynamicRule("ZELLE FROM ", Income.DirectPay, pascal)
+        tracker = RuleTable(dynamic=(rule,)).tracked()
+        assert tracker.unused() == [
+            Match(
+                kind="dynamic",
+                key="ZELLE FROM ",
+                account=Income.DirectPay,
+            ),
+        ]
+
+
 class TestRuleTableLoading:
     def test_from_mapping(self):
         table = RuleTable.from_mapping(
@@ -209,3 +356,41 @@ class TestRuleTableLoading:
         table = RuleTable.from_json(path)
         assert table.match("FOO") == Assets.Bank.Checking
         assert table.match("BAR baz") == Expenses.Misc
+
+    def test_from_mapping_dynamic(self):
+        table = RuleTable.from_mapping(
+            {
+                "dynamic": [
+                    {
+                        "prefix": "ZELLE FROM ",
+                        "under": "Income:DirectPay",
+                        "sanitize": "pascal",
+                    },
+                ],
+            },
+        )
+        assert table.match("ZELLE FROM mary anne") == Income.DirectPay.MaryAnne
+
+    def test_from_mapping_dynamic_default_sanitizer(self):
+        table = RuleTable.from_mapping(
+            {
+                "dynamic": [
+                    {"prefix": "X ", "under": "Income:A"},
+                ],
+            },
+        )
+        assert table.match("X foo") == Income.A["foo"]
+
+    def test_from_mapping_unknown_sanitizer(self):
+        with pytest.raises(ValueError, match="unknown sanitizer 'snake'"):
+            RuleTable.from_mapping(
+                {
+                    "dynamic": [
+                        {
+                            "prefix": "X ",
+                            "under": "Income:A",
+                            "sanitize": "snake",
+                        },
+                    ],
+                },
+            )
