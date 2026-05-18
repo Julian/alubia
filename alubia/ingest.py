@@ -5,7 +5,7 @@ Ingestion helpers for reading in files.
 from __future__ import annotations
 
 from csv import DictReader
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 import datetime
 import json
 import re
@@ -70,6 +70,17 @@ def _nonempty(lines: Iterable[str]):
 
 
 @frozen
+class Match:
+    """
+    A successful rule lookup: which kind of rule fired, its key, the account.
+    """
+
+    kind: Literal["exact", "prefix"]
+    key: str
+    account: Account
+
+
+@frozen
 class RuleTable:
     """
     A table of payee -> account rules.
@@ -87,12 +98,25 @@ class RuleTable:
         """
         Return the account matching ``payee``, or ``None`` if none matches.
         """
+        result = self.match_rule(payee)
+        return result.account if result is not None else None
+
+    def match_rule(self, payee: str) -> Match | None:
+        """
+        Like ``match``, but also tells you which rule fired.
+        """
         if payee in self.exact:
-            return self.exact[payee]
+            return Match(kind="exact", key=payee, account=self.exact[payee])
         for prefix, account in self.prefix.items():
             if payee.startswith(prefix):
-                return account
+                return Match(kind="prefix", key=prefix, account=account)
         return None
+
+    def tracked(self) -> Tracker:
+        """
+        Wrap this table in a `Tracker` that records which rules fire.
+        """
+        return Tracker(rules=self)
 
     def validate(self) -> list[str]:
         """
@@ -154,6 +178,49 @@ class RuleTable:
         Load a rule table from a JSON file.
         """
         return cls.from_mapping(json.loads(path.read_text()))
+
+
+@frozen
+class Tracker:
+    """
+    A `RuleTable` wrapper that records which rules have matched.
+
+    Use it as a drop-in replacement for the underlying table, then call
+    `unused` at the end of ingestion to find stale rules.
+    """
+
+    rules: RuleTable
+    _hits: set[tuple[str, str]] = field(factory=set)
+
+    def match(self, payee: str) -> Account | None:
+        """
+        Match ``payee`` and record the hit.
+        """
+        result = self.match_rule(payee)
+        return result.account if result is not None else None
+
+    def match_rule(self, payee: str) -> Match | None:
+        """
+        Match ``payee``, recording which rule fired.
+        """
+        result = self.rules.match_rule(payee)
+        if result is not None:
+            self._hits.add((result.kind, result.key))
+        return result
+
+    def unused(self) -> list[Match]:
+        """
+        Rules that never matched anything during this tracker's lifetime.
+        """
+        return [
+            Match(kind="exact", key=key, account=account)
+            for key, account in self.rules.exact.items()
+            if ("exact", key) not in self._hits
+        ] + [
+            Match(kind="prefix", key=key, account=account)
+            for key, account in self.rules.prefix.items()
+            if ("prefix", key) not in self._hits
+        ]
 
 
 @frozen

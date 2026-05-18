@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from alubia.data import Assets, Expenses, Income
-from alubia.ingest import RuleTable
+from alubia.ingest import Match, RuleTable
 
 
 class TestRuleTable:
@@ -91,6 +91,95 @@ class TestRuleTableMerge:
 
     def test_no_args(self):
         assert RuleTable.merge() == RuleTable()
+
+
+class TestMatchRule:
+    def test_exact_returns_match(self):
+        table = RuleTable(exact={"FOO": Income.A})
+        assert table.match_rule("FOO") == Match(
+            kind="exact",
+            key="FOO",
+            account=Income.A,
+        )
+
+    def test_prefix_returns_match(self):
+        table = RuleTable(prefix={"BAR ": Income.B})
+        assert table.match_rule("BAR baz") == Match(
+            kind="prefix",
+            key="BAR ",
+            account=Income.B,
+        )
+
+    def test_no_match(self):
+        assert RuleTable(exact={"FOO": Income.A}).match_rule("X") is None
+
+
+class TestTracker:
+    def test_records_exact_hits(self):
+        table = RuleTable(exact={"FOO": Income.A, "BAR": Income.B})
+        tracker = table.tracked()
+        tracker.match("FOO")
+        assert tracker.unused() == [
+            Match(kind="exact", key="BAR", account=Income.B),
+        ]
+
+    def test_records_prefix_hits(self):
+        table = RuleTable(prefix={"P ": Income.P, "Q ": Income.Q})
+        tracker = table.tracked()
+        tracker.match("P thing")
+        assert tracker.unused() == [
+            Match(kind="prefix", key="Q ", account=Income.Q),
+        ]
+
+    def test_no_hits(self):
+        table = RuleTable(
+            exact={"X": Income.X},
+            prefix={"Y ": Income.Y},
+        )
+        tracker = table.tracked()
+        assert tracker.unused() == [
+            Match(kind="exact", key="X", account=Income.X),
+            Match(kind="prefix", key="Y ", account=Income.Y),
+        ]
+
+    def test_all_hit(self):
+        table = RuleTable(exact={"X": Income.X}, prefix={"Y ": Income.Y})
+        tracker = table.tracked()
+        tracker.match("X")
+        tracker.match("Y stuff")
+        assert tracker.unused() == []
+
+    def test_unmatched_payee_no_hit(self):
+        table = RuleTable(exact={"X": Income.X})
+        tracker = table.tracked()
+        tracker.match("nope")
+        assert tracker.unused() == [
+            Match(kind="exact", key="X", account=Income.X),
+        ]
+
+    def test_match_returns_account(self):
+        table = RuleTable(exact={"FOO": Income.A})
+        tracker = table.tracked()
+        assert tracker.match("FOO") == Income.A
+        assert tracker.match("nope") is None
+
+    def test_match_rule_returns_match(self):
+        table = RuleTable(prefix={"P ": Income.P})
+        tracker = table.tracked()
+        assert tracker.match_rule("P x") == Match(
+            kind="prefix",
+            key="P ",
+            account=Income.P,
+        )
+
+    def test_duplicate_hits_counted_once(self):
+        table = RuleTable(exact={"X": Income.X, "Y": Income.Y})
+        tracker = table.tracked()
+        tracker.match("X")
+        tracker.match("X")
+        assert tracker.unused() == [
+            Match(kind="exact", key="Y", account=Income.Y),
+        ]
 
 
 class TestRuleTableLoading:
