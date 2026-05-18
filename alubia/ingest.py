@@ -7,12 +7,15 @@ from __future__ import annotations
 from csv import DictReader
 from typing import TYPE_CHECKING, Any
 import datetime
+import json
 import re
 
-from attrs import frozen
+from attrs import field, frozen
+
+from alubia.data import Account
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
 
     from alubia.data import (
@@ -64,6 +67,93 @@ def _nonempty(lines: Iterable[str]):
         line = each.strip()
         if line:
             yield line
+
+
+@frozen
+class RuleTable:
+    """
+    A table of payee -> account rules.
+
+    Rules are checked in the order: ``exact`` (full string match), then
+    ``prefix`` (first matching prefix in insertion order wins). ``match``
+    returns ``None`` when nothing matched so callers can pick their own
+    sentinel (e.g. ``~Expenses.Unknown``).
+    """
+
+    exact: Mapping[str, Account] = field(factory=dict)
+    prefix: Mapping[str, Account] = field(factory=dict)
+
+    def match(self, payee: str) -> Account | None:
+        """
+        Return the account matching ``payee``, or ``None`` if none matches.
+        """
+        if payee in self.exact:
+            return self.exact[payee]
+        for prefix, account in self.prefix.items():
+            if payee.startswith(prefix):
+                return account
+        return None
+
+    def validate(self) -> list[str]:
+        """
+        Return human-readable warnings about overlapping or unreachable rules.
+
+        An empty list means the table is unambiguous.
+        """
+        issues: list[str] = []
+        for payee in self.exact:
+            for prefix in self.prefix:
+                if payee.startswith(prefix):
+                    issues.append(
+                        f"exact rule {payee!r} is redundant with "
+                        f"prefix rule {prefix!r}",
+                    )
+                    break
+
+        prefixes = list(self.prefix)
+        issues.extend(
+            f"prefix rule {longer!r} is unreachable: "
+            f"earlier prefix {shorter!r} matches first"
+            for i, shorter in enumerate(prefixes)
+            for longer in prefixes[i + 1 :]
+            if longer.startswith(shorter)
+        )
+        return issues
+
+    @classmethod
+    def merge(cls, *tables: RuleTable) -> RuleTable:
+        """
+        Combine multiple tables; later tables win on conflict.
+        """
+        exact: dict[str, Account] = {}
+        prefix: dict[str, Account] = {}
+        for table in tables:
+            exact.update(table.exact)
+            prefix.update(table.prefix)
+        return cls(exact=exact, prefix=prefix)
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Mapping[str, str]]) -> RuleTable:
+        """
+        Build a table from a nested mapping with ``exact`` / ``prefix`` keys.
+        """
+        return cls(
+            exact={
+                k: Account.from_str(v)
+                for k, v in data.get("exact", {}).items()
+            },
+            prefix={
+                k: Account.from_str(v)
+                for k, v in data.get("prefix", {}).items()
+            },
+        )
+
+    @classmethod
+    def from_json(cls, path: Path) -> RuleTable:
+        """
+        Load a rule table from a JSON file.
+        """
+        return cls.from_mapping(json.loads(path.read_text()))
 
 
 @frozen
