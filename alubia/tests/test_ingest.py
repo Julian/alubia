@@ -5,6 +5,7 @@ import json
 import pytest
 
 from alubia.data import Assets, Expenses, Income
+from alubia.exceptions import InvalidAccount
 from alubia.ingest import (
     DynamicRule,
     Match,
@@ -59,15 +60,24 @@ class TestRuleTableValidate:
         assert table.validate() == []
 
     def test_exact_redundant_with_prefix(self):
+        # same account: the exact rule adds nothing the prefix wouldn't.
         table = RuleTable(
             exact={"FOO BAR": Income.A},
-            prefix={"FOO ": Income.B},
+            prefix={"FOO ": Income.A},
         )
         issues = table.validate()
         assert len(issues) == 1
         assert "redundant" in issues[0]
         assert "'FOO BAR'" in issues[0]
         assert "'FOO '" in issues[0]
+
+    def test_exact_override_of_prefix_is_not_flagged(self):
+        # different account: a deliberate override, not a redundancy.
+        table = RuleTable(
+            exact={"FOO BAR": Income.A},
+            prefix={"FOO ": Income.B},
+        )
+        assert table.validate() == []
 
     def test_unreachable_prefix(self):
         table = RuleTable(
@@ -200,6 +210,16 @@ class TestSanitizers:
     def test_pascal_single(self):
         assert pascal("bob") == "Bob"
 
+    def test_pascal_drops_punctuation(self):
+        assert pascal("John Smith Jr.") == "JohnSmithJr"
+        assert pascal("O'Brien") == "OBrien"
+
+    def test_pascal_is_a_valid_component(self):
+        # whatever pascal emits must be usable as an account child
+        assert str(Income.DirectPay[pascal("John Smith Jr.")]) == (
+            "Income:DirectPay:JohnSmithJr"
+        )
+
     def test_as_is(self):
         assert as_is("Mary-Anne Fry") == "Mary-Anne Fry"
 
@@ -213,9 +233,15 @@ class TestDynamicRule:
         rule = DynamicRule("ZELLE FROM ", Income.DirectPay, pascal)
         assert rule.match("CHECK NUMBER 401") is None
 
-    def test_default_sanitizer_is_identity(self):
+    def test_default_sanitizer_is_pascal(self):
         rule = DynamicRule("X ", Income.A)
-        assert rule.match("X foo bar") == Income.A["foo bar"]
+        assert rule.match("X foo bar") == Income.A.FooBar
+
+    def test_invalid_component_is_rejected(self):
+        # as_is leaves a space in, which is not a legal account component
+        rule = DynamicRule("X ", Income.A, as_is)
+        with pytest.raises(InvalidAccount):
+            rule.match("X foo bar")
 
 
 class TestRuleTableDynamic:
@@ -379,7 +405,7 @@ class TestRuleTableLoading:
                 ],
             },
         )
-        assert table.match("X foo") == Income.A["foo"]
+        assert table.match("X foo") == Income.A.Foo
 
     def test_from_mapping_unknown_sanitizer(self):
         with pytest.raises(ValueError, match="unknown sanitizer 'snake'"):

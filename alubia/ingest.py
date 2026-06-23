@@ -71,9 +71,12 @@ def _nonempty(lines: Iterable[str]):
 
 def pascal(name: str) -> str:
     """
-    PascalCase a free-form name: ``"MARY-ANNE FRY"`` -> ``"MaryAnneFry"``.
+    PascalCase a free-form name into a valid account component.
+
+    Separators and other punctuation are dropped, so ``"MARY-ANNE FRY"`` and
+    ``"John Smith Jr."`` become ``"MaryAnneFry"`` and ``"JohnSmithJr"``.
     """
-    return name.title().replace(" ", "").replace("-", "")
+    return re.sub(r"[^0-9A-Za-z]", "", name.title())
 
 
 def as_is(name: str) -> str:
@@ -107,13 +110,15 @@ class DynamicRule:
 
     Strips ``prefix`` off the payee, sanitizes the remainder, and returns
     ``under[sanitized_remainder]``. For example,
-    ``DynamicRule("ZELLE FROM ", Income.DirectPay, pascal)`` maps
-    ``"ZELLE FROM Mary-Anne"`` to ``Income:DirectPay:MaryAnne``.
+    ``DynamicRule("ZELLE FROM ", Income.DirectPay)`` maps
+    ``"ZELLE FROM Mary-Anne"`` to ``Income:DirectPay:MaryAnne``. The default
+    `pascal` sanitizer keeps the remainder a valid account component; choose
+    `as_is` only when it already is one (e.g. a ticker symbol).
     """
 
     prefix: str
     under: Account
-    sanitize: Callable[[str], str] = field(default=as_is)
+    sanitize: Callable[[str], str] = field(default=pascal)
 
     def match(self, payee: str) -> Account | None:
         """
@@ -181,13 +186,17 @@ class RuleTable:
         An empty list means the table is unambiguous.
         """
         issues: list[str] = []
-        for payee in self.exact:
-            for prefix in self.prefix:
+        for payee, account in self.exact.items():
+            for prefix, prefixed in self.prefix.items():
                 if payee.startswith(prefix):
-                    issues.append(
-                        f"exact rule {payee!r} is redundant with "
-                        f"prefix rule {prefix!r}",
-                    )
+                    # Only the first matching prefix would ever fire, and an
+                    # exact rule that resolves elsewhere is a deliberate
+                    # override, not a redundancy.
+                    if account == prefixed:
+                        issues.append(
+                            f"exact rule {payee!r} is redundant with "
+                            f"prefix rule {prefix!r}",
+                        )
                     break
 
         prefixes = list(self.prefix)
@@ -239,7 +248,7 @@ class RuleTable:
         """
         dynamic: list[DynamicRule] = []
         for entry in data.get("dynamic", ()):
-            sanitize_name = entry.get("sanitize", "as-is")
+            sanitize_name = entry.get("sanitize", "pascal")
             if sanitize_name not in SANITIZERS:
                 raise ValueError(
                     f"unknown sanitizer {sanitize_name!r}; "

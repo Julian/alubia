@@ -7,11 +7,16 @@ from __future__ import annotations
 from _pydecimal import Decimal  # the C module obfuscates exception messages
 from functools import total_ordering
 from typing import TYPE_CHECKING, Any, Literal, Protocol
+import re
 
 from attrs import evolve, field, frozen
 from rpds import Queue
 
-from alubia.exceptions import InvalidOperation, InvalidTransaction
+from alubia.exceptions import (
+    InvalidAccount,
+    InvalidOperation,
+    InvalidTransaction,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -22,6 +27,20 @@ if TYPE_CHECKING:
 
 def _to_beancount_account_str(parts: Iterable[str]):
     return ":".join(parts)
+
+
+#: A single beancount account component: a capital letter or digit, then any
+#: letters, digits, or dashes.
+_COMPONENT = re.compile(r"[A-Z0-9][A-Za-z0-9-]*\Z")
+
+
+def _check_components(self: Account, attribute: Attribute[Queue[str]], value):
+    for part in value:
+        if not _COMPONENT.match(part):
+            raise InvalidAccount(
+                f"{part!r} is not a valid beancount account component "
+                f"in {_to_beancount_account_str(value)!r}",
+            )
 
 
 _DEFAULT_WIDTH = 100
@@ -151,6 +170,7 @@ class Account:
     _parts: Queue[str] = field(
         alias="parts",
         converter=Queue,
+        validator=_check_components,
         repr=_to_beancount_account_str,
     )
     _prefix: str = field(alias="prefix", default="")

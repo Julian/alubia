@@ -14,7 +14,11 @@ from alubia.data import (
     Posting,
     Transaction,
 )
-from alubia.exceptions import InvalidOperation, InvalidTransaction
+from alubia.exceptions import (
+    InvalidAccount,
+    InvalidOperation,
+    InvalidTransaction,
+)
 
 TODAY = date.today()
 GBP100 = Amount.from_str("£100.00")
@@ -69,6 +73,18 @@ class TestAccount:
     def test_from_str_roundtrips(self):
         for account in [Assets.Bank.Checking, ~Expenses.Unknown, Income]:
             assert Account.from_str(str(account)) == account
+
+    def test_child_with_space_is_rejected(self):
+        with pytest.raises(InvalidAccount):
+            Income.DirectPay["Mary Anne"]
+
+    def test_child_starting_lowercase_is_rejected(self):
+        with pytest.raises(InvalidAccount):
+            Income.DirectPay["mary"]
+
+    def test_from_str_empty_component_is_rejected(self):
+        with pytest.raises(InvalidAccount):
+            Account.from_str("Income::DirectPay")
 
 
 BANK = Assets.Bank.Checking
